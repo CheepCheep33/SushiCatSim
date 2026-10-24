@@ -12,15 +12,16 @@ const fakeStorage = () => {
   return { getItem: (k) => data[k] ?? null, setItem: (k, v) => { data[k] = v; }, data };
 };
 
-test('pickChefsChoice never picks the first customer and follows the chance', () => {
-  assert.deepEqual(pickChefsChoice(4, () => 0), [false, true, true, true]);
+test('pickChefsChoice never picks the first customer, follows the chance and caps a level', () => {
+  assert.deepEqual(pickChefsChoice(4, () => 0), [false, true, false, false]);
+  assert.deepEqual(pickChefsChoice(4, () => 0, 1, 4), [false, true, true, true]);
   assert.deepEqual(pickChefsChoice(3, () => 0.99), [false, false, false]);
-  assert.deepEqual(pickChefsChoice(2, () => 0.29), [false, true]);
-  assert.deepEqual(pickChefsChoice(2, () => 0.3), [false, false]);
+  assert.deepEqual(pickChefsChoice(2, () => 0.14), [false, true]);
+  assert.deepEqual(pickChefsChoice(2, () => 0.15), [false, false]);
   let seed = 1;
   const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  const picks = pickChefsChoice(10001, rng).slice(1).filter(Boolean).length;
-  assert.ok(picks > 2700 && picks < 3300, `about 3 in 10, got ${picks}`);
+  const picks = pickChefsChoice(10001, rng, undefined, Infinity).slice(1).filter(Boolean).length;
+  assert.ok(picks > 1300 && picks < 1700, `about 3 in 20, got ${picks}`);
 });
 
 test('inventProblem accepts real nigiri and rolled maki only', () => {

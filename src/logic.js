@@ -76,8 +76,9 @@ export function starsFor(coins, targets) {
   return Math.max(1, stars);
 }
 
-// Chef's choice: about 3 in 10 customers ask Nori to invent something.
-export const CHEFS_CHOICE_CHANCE = 0.3;
+// Chef's choice: about 3 in 20 customers ask Nori to invent something, at most once a level.
+export const CHEFS_CHOICE_CHANCE = 0.15;
+export const CHEFS_CHOICE_PER_LEVEL = 1;
 export const COINS_PER_STAR = 4;
 // What can go on a nigiri or inside a roll. Rice and nori are the base, never the topping.
 export const TOPPINGS = ['salmon', 'tuna', 'cucumber'];
@@ -98,8 +99,13 @@ export const TASTES = {
 
 // Which customers in a level ask for chef's choice. The first customer always
 // orders off the menu, so the level's lesson comes first.
-export function pickChefsChoice(count, rng = Math.random, chance = CHEFS_CHOICE_CHANCE) {
-  return Array.from({ length: count }, (_, i) => i > 0 && rng() < chance);
+export function pickChefsChoice(count, rng = Math.random, chance = CHEFS_CHOICE_CHANCE, max = CHEFS_CHOICE_PER_LEVEL) {
+  let picked = 0;
+  return Array.from({ length: count }, (_, i) => {
+    const pick = i > 0 && picked < max && rng() < chance;
+    if (pick) picked++;
+    return pick;
+  });
 }
 
 // Why an invented plate isn't proper sushi yet, or null if it is.

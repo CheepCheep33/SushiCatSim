@@ -348,7 +348,8 @@ class BarScene extends Phaser.Scene {
     this.newRecipes = 0;
     // ?chef=1 makes every customer after the first ask for chef's choice, handy for testing.
     const always = new URLSearchParams(location.search).get('chef') === '1';
-    this.chefsChoice = pickChefsChoice(this.level.customers.length, always ? () => 0 : Math.random);
+    const count = this.level.customers.length;
+    this.chefsChoice = always ? pickChefsChoice(count, () => 0, 1, count) : pickChefsChoice(count);
   }
 
   create() {
