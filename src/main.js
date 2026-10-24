@@ -363,8 +363,10 @@ class BarScene extends Phaser.Scene {
     this.trash = this.add.image(trashX, 470, 'trash').setScale(mat ? 0.75 : 1);
     this.add.text(trashX, mat ? 520 : 535, 'Trash', { fontFamily: BODY_FONT, fontSize: '16px', color: '#2b2118' }).setOrigin(0.5);
 
+    // Whatever is being dragged floats above the board, mat and trash.
+    this.input.on('dragstart', (pointer, obj) => obj.setDepth(10));
     this.input.on('drag', (pointer, obj, x, y) => obj.setPosition(x, y));
-    this.input.on('dragend', (pointer, obj) => this.onDrop(pointer, obj));
+    this.input.on('dragend', (pointer, obj) => { obj.setDepth(0); this.onDrop(pointer, obj); });
 
     this.updateHud();
     this.say(NORI.levelIntro[this.level.id] ?? NORI.intro);
@@ -377,7 +379,12 @@ class BarScene extends Phaser.Scene {
       const y = 470;
       this.add.image(x, y, 'bin').setScale(scale);
       this.add.text(x, y + 56 * scale, INGREDIENTS[ing].name, { fontFamily: BODY_FONT, fontSize: '16px', color: '#2b2118' }).setOrigin(0.5);
-      const piece = this.add.image(x, y, ing).setScale(0.8 * scale).setInteractive({ useHandCursor: true, draggable: true });
+      // The hit area covers the whole bin, so grabbing anywhere in the box picks up the piece.
+      const piece = this.add.image(x, y, ing).setScale(0.8 * scale);
+      const binW = 100 / 0.8;
+      const binH = 84 / 0.8;
+      const hitArea = new Phaser.Geom.Rectangle(piece.width / 2 - binW / 2, piece.height / 2 - binH / 2, binW, binH);
+      piece.setInteractive({ hitArea, hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true, draggable: true });
       piece.setData({ kind: 'ingredient', ingredient: ing, home: { x, y } });
     });
   }
@@ -451,7 +458,7 @@ class BarScene extends Phaser.Scene {
     if (this.board.length === 0) return;
     const stack = drawPlate(this, this.board, this.rolled);
     this.plate = this.add.container(this.boardX, 470, [stack]);
-    this.plate.setSize(150, 110);
+    this.plate.setSize(240, 120); // the whole cutting board is the handle
     this.plate.setInteractive({ useHandCursor: true, draggable: true });
     this.plate.setData({ kind: 'plate', home: { x: this.boardX, y: 470 } });
   }
