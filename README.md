@@ -9,6 +9,8 @@ About 1 in 4 levels has a customer (never the first, and at most one per level) 
 - Menu orders: 5 stars for a clean plate, one less per mistake, never below 3.
 - Chef's choice: 1 star for real sushi (rice then toppings, or a rolled nori-rice-filling maki), plus 1 each for being new (not a menu plate), using their favourite, leaving out what they hate, and no mistakes. It pays 4 coins per star.
 
+Progress is saved too. **Lantern Lane**, the level map, hangs one paper lantern per level along a street at dusk: lit lanterns are open and show the best stars earned, dark ones are locked until you finish the level before. Coins from every shift go into a wallet that the shop will spend later. The title screen has **Continue**, which opens the next unfinished level, and a small "Reset progress (grown-ups)" link that asks you to type RESET. Resetting keeps the Recipe Book.
+
 New inventions are saved in the **Recipe Book** (title screen or end of a shift), named after the customer who asked, like "Kappa's Cucumber-Tuna Roll". Tap a recipe in the book to give it your own name. It lives in the browser's localStorage, so it stays between visits on the same device.
 
 The design plan lives in the [game design doc](https://claude.ai/artifact/GVU7KHzPCkyxkKstf7FEHe).
@@ -29,7 +31,7 @@ Built with [Phaser 3](https://phaser.io). There's no bundler: `index.html` loads
 
 - `src/logic.js` holds the game rules (recipes, payouts, hints, stars), with no Phaser in it, so it's testable in Node.
 - `src/levels.js` holds level data. Add a level by adding an entry.
-- `src/save.js` holds saved progress (the Recipe Book for now) in localStorage.
+- `src/save.js` holds saved progress in localStorage under one key (`neko-nigiri-save`): stars and best coins per level, the coin wallet, upgrades owned, and the Recipe Book. The save has a version number; older saves are upgraded when loaded.
 - `src/puns.js` holds everything Chef Nori and the customers say.
 - `src/main.js` holds the Phaser scenes and placeholder art, all drawn with shapes.
 

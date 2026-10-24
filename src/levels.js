@@ -1,9 +1,13 @@
 // Level data. Learning levels have no timer (timeLimit: null).
 
+// The level map shows dark "coming soon" lanterns until there are this many levels.
+export const MAP_SLOTS = 5;
+
 export const LEVELS = [
   {
     id: 1,
     title: 'Learning Level 1: Nigiri',
+    name: 'Nigiri',
     timeLimit: null,
     rollingMat: false,
     menu: ['salmon_nigiri', 'tuna_nigiri'],
@@ -21,6 +25,7 @@ export const LEVELS = [
   {
     id: 2,
     title: 'Learning Level 2: Maki rolls',
+    name: 'Maki rolls',
     timeLimit: null,
     rollingMat: true,
     menu: ['tuna_maki', 'cucumber_maki', 'salmon_nigiri', 'tuna_nigiri'],

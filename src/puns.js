@@ -91,6 +91,43 @@ export const BOOK = {
   renameHint: "Nori says: make it a good one. Or a punny one. Ideally both.",
 };
 
+// Level map, title screen and results wording.
+export const MAP = {
+  title: 'Lantern Lane',
+  subtitle: 'Each lantern is a shift. Tap a lit one to open the shop.',
+  button: 'Level map',
+  continue: (n) => `Continue: Level ${n}`,
+  start: 'Open the shop',
+  nori: [
+    'Pick a lantern. Any lantern. My nap is waiting.',
+    "Light them all, kitten. Then maybe I'll purr. Maybe.",
+    "Stars? Coins? I'm not im-paw-ssed. Yet.",
+    'Walk faster. These paws were made for napping.',
+  ],
+  locked: (n) => `That lantern's still dark. Finish Level ${n} first. No skipping, kitten.`,
+  soon: "That one's still being built. Even I can't cook in an empty kitchen.",
+  playAgain: 'Back again? Glutton for punish-mint. Fine.',
+  locks: 'Locked',
+  comingSoon: 'Coming soon',
+  wallet: (coins) => `${coins} coins`,
+};
+
+export const RESULTS = {
+  unlocked: (n) => `Level ${n} unlocked! A new lantern is lit.`,
+  moreStars: 'New best stars for this level!',
+  bestCoins: 'New best coins for this level!',
+  wallet: (coins) => `${coins} coins in the wallet`,
+};
+
+export const RESET = {
+  link: 'Reset progress (grown-ups)',
+  title: 'Reset progress?',
+  body: 'This wipes all stars, unlocked levels and coins, and starts again from Level 1.',
+  keepsBook: 'The Recipe Book stays.',
+  typeIt: 'Type RESET to confirm.',
+  button: 'Reset',
+};
+
 export const CUSTOMER_LINES = {
   mouse: 'Um... s-salmon please. Please don\'t eat me.',
   owl: 'Hoo... tuna, please. I\'m up past my bedtime.',
