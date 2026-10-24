@@ -2,9 +2,12 @@ import {
   INGREDIENTS, RECIPES, MAX_BOARD, MAKI_BASE, TASTES, INVENT_MISTAKES, servePlate, boardHint, rollProblem, starsFor,
   pickChefsChoice, inventProblem, serveChefsChoice, rateOrder,
 } from './logic.js';
-import { LEVELS } from './levels.js';
-import { NORI, CUSTOMER_LINES, CHEFS_CHOICE_LINES, THANKS, BOOK, pick } from './puns.js';
-import { loadSave, writeSave, addToRecipeBook, renameRecipe, MAX_NAME } from './save.js';
+import { LEVELS, MAP_SLOTS } from './levels.js';
+import { NORI, CUSTOMER_LINES, CHEFS_CHOICE_LINES, THANKS, BOOK, MAP, RESULTS, RESET, pick } from './puns.js';
+import {
+  loadSave, writeSave, addToRecipeBook, renameRecipe, MAX_NAME, recordShift, isUnlocked, hasProgress,
+  continueLevel, totalStars, resetProgress,
+} from './save.js';
 
 const W = 960;
 const H = 600;
@@ -95,6 +98,21 @@ function makeTextures(scene) {
   g.lineStyle(2, 0xa83420, 0.7);
   for (let i = 0; i < 4; i++) g.strokeEllipse(30, 45, 56 - i * 14, 70);
   g.generateTexture('lantern', 60, 90);
+  g.clear();
+
+  // An unlit lantern, for levels that are locked or still being built.
+  g.fillStyle(0x6a625a).fillEllipse(30, 45, 56, 70);
+  g.fillStyle(0x1a1a1a).fillRect(14, 4, 32, 8).fillRect(14, 78, 32, 8);
+  g.lineStyle(2, 0x4e4842, 0.8);
+  for (let i = 0; i < 4; i++) g.strokeEllipse(30, 45, 56 - i * 14, 70);
+  g.generateTexture('lanternOff', 60, 90);
+  g.clear();
+
+  // A coin, for the wallet.
+  g.fillStyle(0xb8862a).fillCircle(12, 12, 12);
+  g.fillStyle(0xe8b84a).fillCircle(12, 12, 9);
+  g.fillStyle(0xb8862a).fillRect(9, 9, 6, 6); // the square hole of an old mon coin
+  g.generateTexture('coin', 24, 24);
   g.clear();
 
   g.destroy();
@@ -323,11 +341,31 @@ class TitleScene extends Phaser.Scene {
     this.add.text(640, 175, 'Neko Nigiri', { fontFamily: TITLE_FONT, fontSize: '56px', color: '#2c3e6b', fontStyle: 'bold' }).setOrigin(0.5);
     this.add.text(640, 235, 'A sushi bar run by a very grumpy cat', { fontFamily: BODY_FONT, fontSize: '20px', color: '#2b2118' }).setOrigin(0.5);
     this.add.text(640, 290, `"${NORI.title}"`, { fontFamily: BODY_FONT, fontSize: '18px', color: '#6b5a48', fontStyle: 'italic' }).setOrigin(0.5);
+    const save = loadSave();
+    const played = hasProgress(save);
+    if (played) {
+      this.add.image(560, 318, 'coin').setScale(0.8);
+      this.add.text(576, 318, `${MAP.wallet(save.wallet)}    ★ ${totalStars(save)}`, { fontFamily: BODY_FONT, fontSize: '17px', color: '#2b2118' }).setOrigin(0, 0.5);
+    }
     // ?level=2 in the address jumps straight to that level, handy for testing.
     const wanted = Number(new URLSearchParams(location.search).get('level')) - 1;
-    const level = LEVELS[wanted] ? wanted : 0;
-    button(this, 640, 440, 'Open the shop', () => this.scene.start('bar', { level }));
-    button(this, 640, 520, BOOK.button, () => this.scene.start('book', { back: 'title' }), 22);
+    const level = LEVELS[wanted] ? wanted : continueLevel(save, LEVELS);
+    button(this, 640, 408, played ? MAP.continue(LEVELS[level].id) : MAP.start, () => this.scene.start('bar', { level }));
+    button(this, 525, 486, MAP.button, () => this.scene.start('map'), 22);
+    button(this, 755, 486, BOOK.button, () => this.scene.start('book', { back: 'title' }), 22);
+    if (played || save.recipeBook.length) {
+      const reset = this.add.text(W - 12, H - 10, RESET.link, { fontFamily: BODY_FONT, fontSize: '13px', color: '#7a5a3a' })
+        .setOrigin(1, 1).setInteractive({ useHandCursor: true });
+      reset.on('pointerup', () => {
+        this.input.enabled = false;
+        askToReset((ok) => {
+          this.input.enabled = true;
+          if (!ok) return;
+          writeSave(resetProgress(loadSave()));
+          this.scene.restart();
+        });
+      });
+    }
   }
 }
 
@@ -424,9 +462,13 @@ class BarScene extends Phaser.Scene {
     this.mistakes = 0;
     if (this.customerIndex >= this.level.customers.length) {
       this.say(NORI.levelDone);
+      const stars = starsFor(this.coins, this.level.starTargets);
+      const save = loadSave();
+      const progress = recordShift(save, LEVELS, this.levelIndex, { coins: this.coins, stars });
+      writeSave(save);
       this.time.delayedCall(1600, () => this.scene.start('results', {
-        level: this.levelIndex, coins: this.coins, stars: starsFor(this.coins, this.level.starTargets),
-        ratings: this.ratings, newRecipes: this.newRecipes,
+        level: this.levelIndex, coins: this.coins, stars, ratings: this.ratings, newRecipes: this.newRecipes,
+        progress, wallet: save.wallet,
       }));
       return;
     }
@@ -693,43 +735,178 @@ class BarScene extends Phaser.Scene {
 class ResultsScene extends Phaser.Scene {
   constructor() { super('results'); }
 
-  create({ level, coins, stars, ratings = [], newRecipes = 0 }) {
+  create(data) {
+    const { level, coins, stars, ratings = [], newRecipes = 0, progress = {}, wallet } = data;
     drawBackdrop(this);
     drawNori(this, 200, 300);
-    speechBubble(this, 360, 70, 540, 330);
+    speechBubble(this, 360, 60, 540, 360);
     this.add.text(630, 115, 'Shift complete!', { fontFamily: TITLE_FONT, fontSize: '44px', color: '#2c3e6b', fontStyle: 'bold' }).setOrigin(0.5);
     this.add.text(630, 185, starText(stars, 3), { fontFamily: BODY_FONT, fontSize: '56px', color: '#e0a82e' }).setOrigin(0.5);
-    this.add.text(630, 245, `${coins} coins earned`, { fontFamily: BODY_FONT, fontSize: '24px', color: '#2b2118' }).setOrigin(0.5);
-    const average = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
-    this.add.text(630, 282, `Customers rated you ${average.toFixed(1)} out of 5 ★`, { fontFamily: BODY_FONT, fontSize: '20px', color: '#2b2118' }).setOrigin(0.5);
-    if (newRecipes) {
-      this.add.text(630, 312, `${newRecipes} new recipe${newRecipes > 1 ? 's' : ''} in your Recipe Book`, { fontFamily: BODY_FONT, fontSize: '18px', color: '#d2452c' }).setOrigin(0.5);
+    this.add.text(630, 240, `${coins} coins earned`, { fontFamily: BODY_FONT, fontSize: '24px', color: '#2b2118' }).setOrigin(0.5);
+    if (wallet !== undefined) {
+      this.add.image(630 - 100, 268, 'coin').setScale(0.7);
+      this.add.text(630 - 84, 268, RESULTS.wallet(wallet), { fontFamily: BODY_FONT, fontSize: '16px', color: '#6b5a48' }).setOrigin(0, 0.5);
     }
-    this.add.text(630, 355, stars === 3 ? '"...Fine. That was purr-fect. Tell no one."' : '"Fin-ally. Now let me nap."', {
+    const average = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
+    this.add.text(630, 296, `Customers rated you ${average.toFixed(1)} out of 5 ★`, { fontFamily: BODY_FONT, fontSize: '20px', color: '#2b2118' }).setOrigin(0.5);
+    const notes = [];
+    if (progress.unlocked) notes.push(RESULTS.unlocked(LEVELS[level + 1].id));
+    if (progress.moreStars) notes.push(RESULTS.moreStars);
+    else if (progress.bestCoins) notes.push(RESULTS.bestCoins);
+    if (newRecipes) notes.push(`${newRecipes} new recipe${newRecipes > 1 ? 's' : ''} in your Recipe Book`);
+    notes.forEach((note, i) => {
+      this.add.text(630, 326 + i * 24, note, { fontFamily: BODY_FONT, fontSize: '18px', color: '#d2452c', fontStyle: 'bold' }).setOrigin(0.5);
+    });
+    this.add.text(630, 330 + Math.max(notes.length, 1) * 24, stars === 3 ? '"...Fine. That was purr-fect. Tell no one."' : '"Fin-ally. Now let me nap."', {
       fontFamily: BODY_FONT, fontSize: '18px', color: '#6b5a48', fontStyle: 'italic',
     }).setOrigin(0.5);
-    button(this, 520, 460, 'Play again', () => this.scene.start('bar', { level }));
+    button(this, 520, 470, 'Play again', () => this.scene.start('bar', { level }));
     const next = LEVELS[level + 1];
-    button(this, 760, 460, next ? 'Next level' : 'More soon', () => {
+    button(this, 760, 470, next ? 'Next level' : 'More soon', () => {
       if (next) this.scene.start('bar', { level: level + 1 });
     });
-    button(this, 640, 540, BOOK.button, () => this.scene.start('book', { back: 'results', data: { level, coins, stars, ratings, newRecipes } }), 22);
+    button(this, 540, 548, MAP.button, () => this.scene.start('map', { page: Math.floor(level / MAP_SLOTS) }), 22);
+    button(this, 740, 548, BOOK.button, () => this.scene.start('book', { back: 'results', data }), 22);
   }
 }
 
-// A plain HTML box over the game for typing a recipe's name, since a canvas can't take
-// typing (or bring up a tablet keyboard) on its own. Calls onDone with the text, or null.
-function askForName(current, onDone) {
+// Lantern Lane: one paper lantern per level, strung along a street at dusk. Lit lanterns
+// are open, with the best stars earned underneath. Dark ones are locked or coming soon.
+class MapScene extends Phaser.Scene {
+  constructor() { super('map'); }
+
+  create({ page = 0 } = {}) {
+    const save = loadSave();
+    this.drawStreet();
+    this.add.text(W / 2, 40, MAP.title, { fontFamily: TITLE_FONT, fontSize: '40px', color: '#fffaf0', fontStyle: 'bold' }).setOrigin(0.5);
+    this.add.text(W / 2, 78, MAP.subtitle, { fontFamily: BODY_FONT, fontSize: '16px', color: '#e8dcc0', fontStyle: 'italic' }).setOrigin(0.5);
+    const tag = { fontFamily: BODY_FONT, fontSize: '17px', color: '#2b2118', backgroundColor: '#fffaf0', padding: { x: 8, y: 4 } };
+    this.add.text(20, 20, `★ ${totalStars(save)} / ${LEVELS.length * 3}`, { ...tag, color: '#b07a10' });
+    const wallet = this.add.text(W - 20, 20, MAP.wallet(save.wallet), { ...tag, padding: { left: 30, right: 8, y: 4 } }).setOrigin(1, 0);
+    this.add.image(wallet.x - wallet.width + 16, wallet.y + wallet.height / 2, 'coin').setScale(0.75);
+
+    // Nori grumbles from the corner.
+    this.add.container(110, 520, [drawNori(this, 0, 0)]).setScale(0.42);
+    speechBubble(this, 190, 470, 300, 76);
+    this.noriText = this.add.text(204, 480, pick(MAP.nori), {
+      fontFamily: BODY_FONT, fontSize: '15px', color: '#2b2118', wordWrap: { width: 272 },
+    });
+
+    const slots = Math.max(LEVELS.length, MAP_SLOTS);
+    const pages = Math.ceil(slots / MAP_SLOTS);
+    page = Phaser.Math.Clamp(page, 0, pages - 1);
+    const next = continueLevel(save, LEVELS);
+    // The rope sags between two posts; lanterns hang from it.
+    const ropeY = (x) => 150 + 40 * Math.sin(Math.PI * (x - 40) / (W - 80));
+    const rope = this.add.graphics().lineStyle(3, 0x1a1410);
+    rope.beginPath().moveTo(40, ropeY(40));
+    for (let x = 40; x <= W - 40; x += 10) rope.lineTo(x, ropeY(x));
+    rope.strokePath();
+    for (let i = 0; i < MAP_SLOTS; i++) {
+      const index = page * MAP_SLOTS + i;
+      if (index >= slots) break;
+      const x = 150 + i * 165;
+      this.drawLantern(x, ropeY(x), index, save, index === next);
+    }
+
+    const flip = (p) => this.scene.restart({ page: p });
+    if (page > 0) button(this, 40, 300, '◀', () => flip(page - 1), 22);
+    if (page < pages - 1) button(this, W - 40, 300, '▶', () => flip(page + 1), 22);
+    button(this, 640, 512, BOOK.button, () => this.scene.start('book', { back: 'map', data: { page } }), 22);
+    button(this, 850, 512, 'Back', () => this.scene.start('title'), 22);
+  }
+
+  // A dusk street: sky, a row of wooden shop fronts with tiled roofs and noren, and stone paving.
+  drawStreet() {
+    const g = this.add.graphics();
+    g.fillGradientStyle(0x1e2a4f, 0x1e2a4f, 0x6a4a6a, 0x6a4a6a).fillRect(0, 0, W, 380);
+    g.fillStyle(0xfff6d8, 0.9).fillCircle(820, 110, 26); // moon
+    g.fillStyle(0xfff6d8, 0.7);
+    for (const [x, y] of [[90, 120], [260, 60], [420, 130], [560, 50], [700, 140], [900, 70], [340, 100]]) g.fillCircle(x, y, 1.5);
+    for (let i = 0; i < 6; i++) {
+      const x = i * 170 - 20;
+      g.fillStyle(0x3a2418).fillRect(x, 250, 170, 150); // shop front
+      g.fillStyle(0x2a2a30).fillTriangle(x - 14, 252, x + 80, 214, x + 174, 252); // roof
+      g.fillStyle(0x1e1e24).fillRect(x - 14, 248, 188, 8);
+      g.lineStyle(2, 0x5a3a24);
+      for (let k = 1; k < 8; k++) g.lineBetween(x + k * 20, 290, x + k * 20, 400); // lattice
+      g.fillStyle(i % 2 ? COLORS.indigo : 0x7a2a22);
+      for (let k = 0; k < 3; k++) g.fillRect(x + 30 + k * 34, 262, 30, 40); // noren
+      g.fillStyle(0xffd27a, 0.25).fillRect(x + 30, 302, 98, 60); // warm window light
+    }
+    g.fillStyle(0x8a8478).fillRect(0, 400, W, H - 400);
+    g.lineStyle(2, 0x6e695f);
+    for (let y = 420; y < H; y += 30) g.lineBetween(0, y, W, y);
+    for (let y = 400, row = 0; y < H; y += 30, row++) {
+      for (let x = row % 2 ? 40 : 0; x < W; x += 80) g.lineBetween(x, y, x, y + 30);
+    }
+    g.fillStyle(0x1a1410).fillRect(30, 140, 10, 260).fillRect(W - 40, 140, 10, 260); // rope posts
+  }
+
+  drawLantern(x, y, index, save, isNext) {
+    const level = LEVELS[index];
+    const open = level && isUnlocked(save, LEVELS, index);
+    const best = level && save.levels[level.id];
+    const top = y + 10;
+    this.add.graphics().lineStyle(2, 0x1a1410).lineBetween(x, y, x, top + 6);
+    if (open) {
+      const glow = this.add.circle(x, top + 64, 70, 0xffd27a, isNext ? 0.4 : 0.22);
+      if (isNext) this.tweens.add({ targets: glow, alpha: 0.15, scale: 1.15, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    }
+    const lantern = this.add.container(x, top, [
+      this.add.image(0, 64, open ? 'lantern' : 'lanternOff').setScale(1.45),
+      this.add.text(0, 64, level ? String(level.id) : '?', {
+        fontFamily: TITLE_FONT, fontSize: '40px', color: open ? '#fffaf0' : '#a8a098', fontStyle: 'bold',
+      }).setOrigin(0.5),
+    ]);
+    if (!open && level) lantern.add(this.drawLock(0, 112));
+    // Lanterns sway a little in the evening breeze, each a bit out of step.
+    this.tweens.add({ targets: lantern, angle: { from: -2.5, to: 2.5 }, duration: 1600 + index * 170, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+
+    const label = level ? level.name : MAP.comingSoon;
+    const card = this.add.graphics().fillStyle(open ? COLORS.cream : 0xd8d0c0).fillRoundedRect(x - 72, top + 140, 144, open ? 66 : 44, 10);
+    card.lineStyle(2, open ? COLORS.vermilion : 0x8a8478).strokeRoundedRect(x - 72, top + 140, 144, open ? 66 : 44, 10);
+    this.add.text(x, top + 150, level ? `Level ${level.id}` : label, { fontFamily: TITLE_FONT, fontSize: '16px', color: open ? '#2c3e6b' : '#5a554c', fontStyle: 'bold' }).setOrigin(0.5, 0);
+    this.add.text(x, top + 168, level ? (open ? label : MAP.locks) : '', { fontFamily: BODY_FONT, fontSize: '13px', color: '#6b5a48' }).setOrigin(0.5, 0);
+    if (open) {
+      this.add.text(x, top + 182, starText(best?.stars ?? 0, 3), { fontFamily: BODY_FONT, fontSize: '20px', color: '#e0a82e' }).setOrigin(0.5, 0);
+    }
+
+    const hit = this.add.zone(x, top + 100, 140, 210).setInteractive({ useHandCursor: !!open });
+    hit.on('pointerup', () => {
+      if (open) {
+        if (best) this.noriText.setText(MAP.playAgain);
+        this.time.delayedCall(best ? 500 : 0, () => this.scene.start('bar', { level: index }));
+      } else {
+        this.noriText.setText(level ? MAP.locked(LEVELS[index - 1].id) : MAP.soon);
+        this.tweens.add({ targets: lantern, x: x + 6, duration: 50, yoyo: true, repeat: 3, onComplete: () => lantern.setX(x) });
+      }
+    });
+  }
+
+  // A little padlock hanging off a locked lantern.
+  drawLock(x, y) {
+    const g = this.add.graphics();
+    g.lineStyle(4, 0x3a3630).beginPath().arc(x, y - 4, 9, Math.PI, 0).strokePath();
+    g.fillStyle(0xc9a040).fillRoundedRect(x - 13, y - 4, 26, 20, 4);
+    g.fillStyle(0x3a3630).fillCircle(x, y + 5, 3);
+    return g;
+  }
+}
+
+// A plain HTML box over the game with one text box, since a canvas can't take typing
+// (or bring up a tablet keyboard) on its own. Calls onDone with the text, or null.
+function textDialog({ title, hint, ok, maxLength = 40 }, current, onDone) {
   const shade = document.createElement('div');
   shade.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:10;';
   shade.innerHTML = `
     <form style="background:#fffaf0;border:3px solid #2b2118;border-radius:16px;padding:20px;width:min(380px,90vw);font-family:${BODY_FONT.replace(/"/g, "'")};color:#2b2118;">
-      <div style="font:bold 22px ${TITLE_FONT.replace(/"/g, "'")};color:#2c3e6b;margin-bottom:6px;">${BOOK.renameTitle}</div>
-      <div style="font-size:14px;color:#6b5a48;margin-bottom:12px;">${BOOK.renameHint}</div>
-      <input name="n" maxlength="${MAX_NAME}" autocomplete="off" style="box-sizing:border-box;width:100%;font-size:18px;padding:8px 10px;border:2px solid #c9b48a;border-radius:8px;">
+      <div style="font:bold 22px ${TITLE_FONT.replace(/"/g, "'")};color:#2c3e6b;margin-bottom:6px;">${title}</div>
+      <div style="font-size:14px;color:#6b5a48;margin-bottom:12px;">${hint}</div>
+      <input name="n" maxlength="${maxLength}" autocomplete="off" style="box-sizing:border-box;width:100%;font-size:18px;padding:8px 10px;border:2px solid #c9b48a;border-radius:8px;">
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;">
         <button type="button" data-cancel style="font-size:16px;padding:8px 14px;border:2px solid #2c3e6b;border-radius:8px;background:#fffaf0;color:#2c3e6b;">Cancel</button>
-        <button type="submit" style="font-size:16px;padding:8px 14px;border:0;border-radius:8px;background:#d2452c;color:#fffaf0;">Save</button>
+        <button type="submit" style="font-size:16px;padding:8px 14px;border:0;border-radius:8px;background:#d2452c;color:#fffaf0;">${ok}</button>
       </div>
     </form>`;
   const form = shade.querySelector('form');
@@ -742,6 +919,16 @@ function askForName(current, onDone) {
   document.body.appendChild(shade);
   input.focus();
   input.select();
+}
+
+function askForName(current, onDone) {
+  textDialog({ title: BOOK.renameTitle, hint: BOOK.renameHint, ok: 'Save', maxLength: MAX_NAME }, current, onDone);
+}
+
+// Resetting needs RESET typed out, so it can't happen by a stray tap. Calls onDone(true or false).
+function askToReset(onDone) {
+  textDialog({ title: RESET.title, hint: `${RESET.body} ${RESET.keepsBook} ${RESET.typeIt}`, ok: RESET.button }, '',
+    (text) => onDone(text?.trim().toUpperCase() === 'RESET'));
 }
 
 // Every recipe the player has invented, eight to a page. Tap one to rename it.
@@ -812,5 +999,5 @@ window.game = new Phaser.Game({
   height: H,
   backgroundColor: '#f3e9d2',
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [TitleScene, BarScene, ResultsScene, RecipeBookScene],
+  scene: [TitleScene, BarScene, ResultsScene, MapScene, RecipeBookScene],
 });
