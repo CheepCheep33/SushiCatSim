@@ -76,8 +76,9 @@ export function starsFor(coins, targets) {
   return Math.max(1, stars);
 }
 
-// Chef's choice: about 3 in 20 customers ask Nori to invent something, at most once a level.
-export const CHEFS_CHOICE_CHANCE = 0.15;
+// Chef's choice: about 7 in 100 customers ask Nori to invent something, at most once a level,
+// so about 1 in 4 five-customer levels has one.
+export const CHEFS_CHOICE_CHANCE = 0.07;
 export const CHEFS_CHOICE_PER_LEVEL = 1;
 export const COINS_PER_STAR = 4;
 // What can go on a nigiri or inside a roll. Rice and nori are the base, never the topping.

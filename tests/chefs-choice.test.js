@@ -16,12 +16,12 @@ test('pickChefsChoice never picks the first customer, follows the chance and cap
   assert.deepEqual(pickChefsChoice(4, () => 0), [false, true, false, false]);
   assert.deepEqual(pickChefsChoice(4, () => 0, 1, 4), [false, true, true, true]);
   assert.deepEqual(pickChefsChoice(3, () => 0.99), [false, false, false]);
-  assert.deepEqual(pickChefsChoice(2, () => 0.14), [false, true]);
-  assert.deepEqual(pickChefsChoice(2, () => 0.15), [false, false]);
+  assert.deepEqual(pickChefsChoice(2, () => 0.06), [false, true]);
+  assert.deepEqual(pickChefsChoice(2, () => 0.07), [false, false]);
   let seed = 1;
   const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   const picks = pickChefsChoice(10001, rng, undefined, Infinity).slice(1).filter(Boolean).length;
-  assert.ok(picks > 1300 && picks < 1700, `about 3 in 20, got ${picks}`);
+  assert.ok(picks > 550 && picks < 850, `about 7 in 100, got ${picks}`);
 });
 
 test('inventProblem accepts real nigiri and rolled maki only', () => {
