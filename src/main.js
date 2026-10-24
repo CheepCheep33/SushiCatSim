@@ -1,6 +1,10 @@
-import { INGREDIENTS, RECIPES, MAX_BOARD, servePlate, boardHint, rollProblem, starsFor } from './logic.js';
+import {
+  INGREDIENTS, RECIPES, MAX_BOARD, MAKI_BASE, TASTES, INVENT_MISTAKES, servePlate, boardHint, rollProblem, starsFor,
+  pickChefsChoice, inventProblem, serveChefsChoice, rateOrder,
+} from './logic.js';
 import { LEVELS } from './levels.js';
-import { NORI, CUSTOMER_LINES, THANKS, pick } from './puns.js';
+import { NORI, CUSTOMER_LINES, CHEFS_CHOICE_LINES, THANKS, BOOK, pick } from './puns.js';
+import { loadSave, writeSave, addToRecipeBook, renameRecipe, MAX_NAME } from './save.js';
 
 const W = 960;
 const H = 600;
@@ -54,18 +58,6 @@ function makeTextures(scene) {
   for (let i = 0; i < 6; i++) g.fillCircle(16 + i * 15, 11, 2);
   g.generateTexture('cucumber', 104, 22);
   g.clear();
-
-  // A rolled maki, cut into three pieces, one texture per filling.
-  for (const [key, ing] of Object.entries(INGREDIENTS)) {
-    for (let i = 0; i < 3; i++) {
-      const cx = 22 + i * 40;
-      g.fillStyle(INGREDIENTS.nori.color).fillCircle(cx, 22, 20);
-      g.fillStyle(INGREDIENTS.rice.color).fillCircle(cx, 22, 15);
-      g.fillStyle(ing.color).fillCircle(cx, 22, 7);
-    }
-    g.generateTexture(`maki_${key}`, 124, 44);
-    g.clear();
-  }
 
   // Bamboo rolling mat (makisu): slats with string ties.
   g.fillStyle(0x9a8a4a).fillRoundedRect(0, 0, 140, 112, 8);
@@ -250,11 +242,32 @@ function drawStack(scene, stack) {
   return c;
 }
 
+// A rolled maki cut into three pieces, showing its fillings. Made the first time it's needed.
+function makiTexture(scene, fillings) {
+  const key = `maki_${fillings.join('_')}`;
+  if (scene.textures.exists(key)) return key;
+  const g = scene.add.graphics();
+  for (let i = 0; i < 3; i++) {
+    const cx = 22 + i * 40;
+    g.fillStyle(INGREDIENTS.nori.color).fillCircle(cx, 22, 20);
+    g.fillStyle(INGREDIENTS.rice.color).fillCircle(cx, 22, 15);
+    if (fillings.length === 1) g.fillStyle(INGREDIENTS[fillings[0]].color).fillCircle(cx, 22, 7);
+    else fillings.forEach((ing, j) => g.fillStyle(INGREDIENTS[ing].color).fillCircle(cx - 4 + j * 8, 22, 5));
+  }
+  g.generateTexture(key, 124, 44);
+  g.destroy();
+  return key;
+}
+
 // A plate: a loose stack, or once rolled, cut maki pieces showing the filling.
 function drawPlate(scene, stack, rolled) {
   if (!rolled) return drawStack(scene, stack);
-  const filling = stack[stack.length - 1];
-  return scene.add.container(0, 0, [scene.add.image(0, 10, `maki_${filling}`)]);
+  const key = makiTexture(scene, stack.slice(MAKI_BASE.length));
+  return scene.add.container(0, 0, [scene.add.image(0, 10, key)]);
+}
+
+function starText(stars, max = 5) {
+  return '★'.repeat(stars) + '☆'.repeat(max - stars);
 }
 
 function speechBubble(scene, x, y, w, h) {
@@ -264,9 +277,9 @@ function speechBubble(scene, x, y, w, h) {
   return g;
 }
 
-function button(scene, x, y, label, onClick) {
+function button(scene, x, y, label, onClick, size = 28) {
   const t = scene.add.text(x, y, label, {
-    fontFamily: TITLE_FONT, fontSize: '28px', color: '#fffaf0', backgroundColor: '#d2452c', padding: { x: 22, y: 10 },
+    fontFamily: TITLE_FONT, fontSize: `${size}px`, color: '#fffaf0', backgroundColor: '#d2452c', padding: { x: 22, y: 10 },
   }).setOrigin(0.5).setInteractive({ useHandCursor: true });
   t.on('pointerover', () => t.setBackgroundColor('#b0341f'));
   t.on('pointerout', () => t.setBackgroundColor('#d2452c'));
@@ -313,7 +326,8 @@ class TitleScene extends Phaser.Scene {
     // ?level=2 in the address jumps straight to that level, handy for testing.
     const wanted = Number(new URLSearchParams(location.search).get('level')) - 1;
     const level = LEVELS[wanted] ? wanted : 0;
-    button(this, 640, 470, 'Open the shop', () => this.scene.start('bar', { level }));
+    button(this, 640, 440, 'Open the shop', () => this.scene.start('bar', { level }));
+    button(this, 640, 520, BOOK.button, () => this.scene.start('book', { back: 'title' }), 22);
   }
 }
 
@@ -330,6 +344,12 @@ class BarScene extends Phaser.Scene {
     this.customerIndex = -1;
     this.mistakes = 0;
     this.taughtRice = false;
+    this.ratings = [];
+    this.newRecipes = 0;
+    // ?chef=1 makes every customer after the first ask for chef's choice, handy for testing.
+    const always = new URLSearchParams(location.search).get('chef') === '1';
+    const count = this.level.customers.length;
+    this.chefsChoice = always ? pickChefsChoice(count, () => 0, 1, count) : pickChefsChoice(count);
   }
 
   create() {
@@ -406,11 +426,13 @@ class BarScene extends Phaser.Scene {
       this.say(NORI.levelDone);
       this.time.delayedCall(1600, () => this.scene.start('results', {
         level: this.levelIndex, coins: this.coins, stars: starsFor(this.coins, this.level.starTargets),
+        ratings: this.ratings, newRecipes: this.newRecipes,
       }));
       return;
     }
     const cust = this.level.customers[this.customerIndex];
     this.customer = cust;
+    this.inventing = this.chefsChoice[this.customerIndex];
     this.customerSprite = drawCustomer(this, 850, 420, cust);
     this.customerLayer.add(this.customerSprite);
     this.customerSprite.setAlpha(0);
@@ -426,6 +448,21 @@ class BarScene extends Phaser.Scene {
     const g = speechBubble(this, 585, 130, 170, 205);
     g.fillStyle(COLORS.cream).fillTriangle(752, 180, 752, 210, 775, 195);
     const recipe = RECIPES[cust.order];
+    this.orderBubble = this.add.container(0, 0, [g, ...(this.inventing ? this.chefsChoiceBubble(cust) : this.menuBubble(cust, recipe))]);
+    this.orderBubble.setDepth(5).setAlpha(0);
+    this.tweens.add({ targets: this.orderBubble, alpha: 1, delay: 500, duration: 300 });
+
+    if (this.inventing) {
+      this.say(NORI.chefsChoice);
+    } else if (this.customerIndex > 0) {
+      if (cust.kind === 'lantern') this.say(NORI.spiritKid);
+      else if (cust.spirit) this.say(NORI.spirit);
+      else if (recipe.rolled) this.say(NORI.nextMaki);
+      else this.say(this.taughtRice ? NORI.nextNigiri : NORI.intro);
+    }
+  }
+
+  menuBubble(cust, recipe) {
     const icon = drawPlate(this, recipe.stack, recipe.rolled);
     icon.setPosition(670, 180).setScale(0.75);
     const name = this.add.text(670, 225, recipe.name, {
@@ -434,16 +471,30 @@ class BarScene extends Phaser.Scene {
     const words = this.add.text(670, 245, `"${CUSTOMER_LINES[cust.kind]}"`, {
       fontFamily: BODY_FONT, fontSize: '13px', color: '#2b2118', wordWrap: { width: 150 }, align: 'center',
     }).setOrigin(0.5, 0);
-    this.orderBubble = this.add.container(0, 0, [g, icon, name, words]);
-    this.orderBubble.setDepth(5).setAlpha(0);
-    this.tweens.add({ targets: this.orderBubble, alpha: 1, delay: 500, duration: 300 });
+    return [icon, name, words];
+  }
 
-    if (this.customerIndex > 0) {
-      if (cust.kind === 'lantern') this.say(NORI.spiritKid);
-      else if (cust.spirit) this.say(NORI.spirit);
-      else if (recipe.rolled) this.say(NORI.nextMaki);
-      else this.say(this.taughtRice ? NORI.nextNigiri : NORI.intro);
+  // A chef's choice order shows what they love and what they won't eat, in pictures.
+  chefsChoiceBubble(cust) {
+    const tastes = TASTES[cust.kind];
+    const parts = [
+      this.add.text(670, 150, "Chef's Choice!", { fontFamily: TITLE_FONT, fontSize: '19px', color: '#d2452c', fontStyle: 'bold' }).setOrigin(0.5),
+      this.add.text(670, 172, 'Invent something new', { fontFamily: BODY_FONT, fontSize: '12px', color: '#6b5a48' }).setOrigin(0.5),
+      this.add.text(600, 196, '♥', { fontFamily: BODY_FONT, fontSize: '22px', color: '#d2452c' }).setOrigin(0.5),
+      this.add.image(682, 196, tastes.likes).setScale(0.6),
+    ];
+    if (tastes.dislikes.length) {
+      parts.push(this.add.text(600, 226, '✗', { fontFamily: BODY_FONT, fontSize: '22px', color: '#2b2118' }).setOrigin(0.5));
+      tastes.dislikes.forEach((ing, i, all) => {
+        const x = all.length === 1 ? 682 : 650 + i * 64;
+        const img = this.add.image(x, 226, ing).setScale(all.length === 1 ? 0.6 : 0.45).setAlpha(0.6);
+        parts.push(img, this.add.text(x, 226, '✗', { fontFamily: BODY_FONT, fontSize: '20px', color: '#2b2118' }).setOrigin(0.5));
+      });
     }
+    parts.push(this.add.text(670, tastes.dislikes.length ? 248 : 222, `"${CHEFS_CHOICE_LINES[cust.kind]}"`, {
+      fontFamily: BODY_FONT, fontSize: '12px', color: '#2b2118', wordWrap: { width: 152 }, align: 'center',
+    }).setOrigin(0.5, 0));
+    return parts;
   }
 
   clearBoard() {
@@ -494,6 +545,12 @@ class BarScene extends Phaser.Scene {
     }
     this.board.push(ing);
     this.rebuildPlate();
+    if (this.inventing) {
+      const problem = inventProblem(this.board) ?? 'ready';
+      if (INVENT_MISTAKES.includes(problem)) this.mistakes++;
+      this.say(NORI.invent[problem]);
+      return;
+    }
     const recipe = RECIPES[this.customer.order];
     const hint = boardHint(this.customer.order, this.board);
     const mistakeLines = {
@@ -522,6 +579,10 @@ class BarScene extends Phaser.Scene {
       onComplete: () => {
         this.rolled = true;
         this.rebuildPlate();
+        if (this.inventing) {
+          this.say(inventProblem(this.board, true) ? NORI.invent.not_a_topping : NORI.rolled);
+          return;
+        }
         const hint = boardHint(this.customer.order, this.board, true);
         this.say(hint === 'ready' ? NORI.rolled : NORI.wrongTopping);
       },
@@ -530,6 +591,10 @@ class BarScene extends Phaser.Scene {
   }
 
   serve() {
+    if (this.inventing) {
+      this.serveInvention();
+      return;
+    }
     const result = servePlate(this.customer.order, this.board, { mistakes: this.mistakes, rolled: this.rolled });
     if (result.needsRoll) {
       // Right stack, just not rolled yet: send it back to the board instead of wasting it.
@@ -544,23 +609,81 @@ class BarScene extends Phaser.Scene {
       this.tweens.add({ targets: this.customerSprite, x: '+=10', duration: 60, yoyo: true, repeat: 3 });
       return;
     }
-    this.coins += result.coins;
-    this.served++;
-    this.updateHud();
+    const stars = rateOrder(this.mistakes);
     this.say(`${pick(NORI.correct)}\n+${result.coins} coins${result.tip ? ` (tip ${result.tip})` : ''}`);
+    this.finishOrder(result.coins, stars);
+  }
+
+  serveInvention() {
+    const cust = this.customer;
+    const result = serveChefsChoice(this.board, {
+      rolled: this.rolled, mistakes: this.mistakes, tastes: TASTES[cust.kind], customerName: cust.name,
+    });
+    if (!result.ok) {
+      // Not sushi yet: hand it back so it can be finished or trashed.
+      if (result.problem !== 'roll_it' && INVENT_MISTAKES.includes(result.problem)) this.mistakes++;
+      this.rebuildPlate();
+      this.say(result.problem === 'roll_it' ? NORI.needsRoll : NORI.invent[result.problem]);
+      this.tweens.add({ targets: this.customerSprite, x: '+=10', duration: 60, yoyo: true, repeat: 3 });
+      return;
+    }
+    const plate = { stack: [...this.board], rolled: this.rolled };
+    this.clearBoard();
+    let note = null;
+    if (result.recipe) {
+      const save = loadSave();
+      const added = addToRecipeBook(save, result.recipe, { stars: result.stars, customer: cust.name });
+      writeSave(save);
+      if (added === 'new') this.newRecipes++;
+      note = { new: BOOK.added, better: BOOK.better }[added];
+      if (note) this.showRecipeNote(note, result.recipe.name, plate);
+    }
+    const line = result.reasons.isNew ? (note === BOOK.added ? NORI.newRecipe : NORI.rating[result.stars]) : NORI.notNew;
+    this.say(`${line}\n+${result.coins} coins`);
+    this.finishOrder(result.coins, result.stars);
+  }
+
+  // A little card that pops up over the board when the Recipe Book changes.
+  showRecipeNote(note, name, plate) {
+    const g = this.add.graphics();
+    g.fillStyle(COLORS.cream).fillRoundedRect(-140, -70, 280, 140, 14);
+    g.lineStyle(3, COLORS.vermilion).strokeRoundedRect(-140, -70, 280, 140, 14);
+    const dish = drawPlate(this, plate.stack, plate.rolled).setScale(0.6).setPosition(0, 2);
+    const card = this.add.container(this.boardX, 470, [
+      g,
+      this.add.text(0, -50, note, { fontFamily: TITLE_FONT, fontSize: '16px', color: '#d2452c', fontStyle: 'bold', align: 'center' }).setOrigin(0.5, 0),
+      dish,
+      this.add.text(0, 40, name, { fontFamily: BODY_FONT, fontSize: '14px', color: '#2b2118', align: 'center', wordWrap: { width: 260 } }).setOrigin(0.5, 0),
+    ]).setDepth(20).setScale(0.2).setAlpha(0);
+    this.tweens.add({ targets: card, scale: 1, alpha: 1, duration: 300, ease: 'Back.out' });
+    this.tweens.add({ targets: card, alpha: 0, y: 440, delay: 1900, duration: 400, onComplete: () => card.destroy() });
+  }
+
+  // Pays up, shows the customer's star rating, and sends them on their way.
+  finishOrder(coins, stars) {
+    this.coins += coins;
+    this.served++;
+    this.ratings.push(stars);
+    this.updateHud();
     const cust = this.customer;
     this.customer = null;
+    this.inventing = false;
     this.orderBubble.destroy();
-    const thanks = this.add.text(760, 90, THANKS[cust.kind], {
+    const rating = this.add.text(760, 44, starText(stars), {
+      fontFamily: BODY_FONT, fontSize: '30px', color: '#e0a82e', backgroundColor: '#fffaf0', padding: { x: 8, y: 0 },
+    }).setOrigin(0.5).setDepth(5).setScale(0.3);
+    this.tweens.add({ targets: rating, scale: 1, duration: 350, ease: 'Back.out' });
+    const thanks = this.add.text(760, 96, THANKS[cust.kind], {
       fontFamily: BODY_FONT, fontSize: '18px', color: '#2c3e6b', backgroundColor: '#fffaf0', padding: { x: 8, y: 6 }, wordWrap: { width: 220 },
     }).setOrigin(0.5).setDepth(5);
     const sprite = this.customerSprite;
     this.tweens.killTweensOf(sprite);
-    this.tweens.add({ targets: [sprite, thanks], alpha: 0, delay: 1200, duration: 500 });
+    this.tweens.add({ targets: [sprite, thanks, rating], alpha: 0, delay: 1700, duration: 500 });
     this.tweens.add({
-      targets: sprite, x: 1100, delay: 1200, duration: 700, onComplete: () => {
+      targets: sprite, x: 1100, delay: 1700, duration: 700, onComplete: () => {
         sprite.destroy();
         thanks.destroy();
+        rating.destroy();
         this.nextCustomer();
       },
     });
@@ -570,20 +693,114 @@ class BarScene extends Phaser.Scene {
 class ResultsScene extends Phaser.Scene {
   constructor() { super('results'); }
 
-  create({ level, coins, stars }) {
+  create({ level, coins, stars, ratings = [], newRecipes = 0 }) {
     drawBackdrop(this);
     drawNori(this, 200, 300);
-    speechBubble(this, 360, 90, 540, 300);
-    this.add.text(630, 140, 'Shift complete!', { fontFamily: TITLE_FONT, fontSize: '44px', color: '#2c3e6b', fontStyle: 'bold' }).setOrigin(0.5);
-    this.add.text(630, 215, '★'.repeat(stars) + '☆'.repeat(3 - stars), { fontFamily: BODY_FONT, fontSize: '56px', color: '#e0a82e' }).setOrigin(0.5);
-    this.add.text(630, 285, `${coins} coins earned`, { fontFamily: BODY_FONT, fontSize: '24px', color: '#2b2118' }).setOrigin(0.5);
-    this.add.text(630, 335, stars === 3 ? '"...Fine. That was purr-fect. Tell no one."' : '"Fin-ally. Now let me nap."', {
+    speechBubble(this, 360, 70, 540, 330);
+    this.add.text(630, 115, 'Shift complete!', { fontFamily: TITLE_FONT, fontSize: '44px', color: '#2c3e6b', fontStyle: 'bold' }).setOrigin(0.5);
+    this.add.text(630, 185, starText(stars, 3), { fontFamily: BODY_FONT, fontSize: '56px', color: '#e0a82e' }).setOrigin(0.5);
+    this.add.text(630, 245, `${coins} coins earned`, { fontFamily: BODY_FONT, fontSize: '24px', color: '#2b2118' }).setOrigin(0.5);
+    const average = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
+    this.add.text(630, 282, `Customers rated you ${average.toFixed(1)} out of 5 ★`, { fontFamily: BODY_FONT, fontSize: '20px', color: '#2b2118' }).setOrigin(0.5);
+    if (newRecipes) {
+      this.add.text(630, 312, `${newRecipes} new recipe${newRecipes > 1 ? 's' : ''} in your Recipe Book`, { fontFamily: BODY_FONT, fontSize: '18px', color: '#d2452c' }).setOrigin(0.5);
+    }
+    this.add.text(630, 355, stars === 3 ? '"...Fine. That was purr-fect. Tell no one."' : '"Fin-ally. Now let me nap."', {
       fontFamily: BODY_FONT, fontSize: '18px', color: '#6b5a48', fontStyle: 'italic',
     }).setOrigin(0.5);
-    button(this, 520, 470, 'Play again', () => this.scene.start('bar', { level }));
+    button(this, 520, 460, 'Play again', () => this.scene.start('bar', { level }));
     const next = LEVELS[level + 1];
-    button(this, 760, 470, next ? 'Next level' : 'More soon', () => {
+    button(this, 760, 460, next ? 'Next level' : 'More soon', () => {
       if (next) this.scene.start('bar', { level: level + 1 });
+    });
+    button(this, 640, 540, BOOK.button, () => this.scene.start('book', { back: 'results', data: { level, coins, stars, ratings, newRecipes } }), 22);
+  }
+}
+
+// A plain HTML box over the game for typing a recipe's name, since a canvas can't take
+// typing (or bring up a tablet keyboard) on its own. Calls onDone with the text, or null.
+function askForName(current, onDone) {
+  const shade = document.createElement('div');
+  shade.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:10;';
+  shade.innerHTML = `
+    <form style="background:#fffaf0;border:3px solid #2b2118;border-radius:16px;padding:20px;width:min(380px,90vw);font-family:${BODY_FONT.replace(/"/g, "'")};color:#2b2118;">
+      <div style="font:bold 22px ${TITLE_FONT.replace(/"/g, "'")};color:#2c3e6b;margin-bottom:6px;">${BOOK.renameTitle}</div>
+      <div style="font-size:14px;color:#6b5a48;margin-bottom:12px;">${BOOK.renameHint}</div>
+      <input name="n" maxlength="${MAX_NAME}" autocomplete="off" style="box-sizing:border-box;width:100%;font-size:18px;padding:8px 10px;border:2px solid #c9b48a;border-radius:8px;">
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;">
+        <button type="button" data-cancel style="font-size:16px;padding:8px 14px;border:2px solid #2c3e6b;border-radius:8px;background:#fffaf0;color:#2c3e6b;">Cancel</button>
+        <button type="submit" style="font-size:16px;padding:8px 14px;border:0;border-radius:8px;background:#d2452c;color:#fffaf0;">Save</button>
+      </div>
+    </form>`;
+  const form = shade.querySelector('form');
+  const input = form.elements.n;
+  input.value = current;
+  const close = (value) => { shade.remove(); onDone(value); };
+  form.addEventListener('submit', (e) => { e.preventDefault(); close(input.value); });
+  shade.querySelector('[data-cancel]').addEventListener('click', () => close(null));
+  shade.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(null); });
+  document.body.appendChild(shade);
+  input.focus();
+  input.select();
+}
+
+// Every recipe the player has invented, eight to a page. Tap one to rename it.
+class RecipeBookScene extends Phaser.Scene {
+  constructor() { super('book'); }
+
+  create({ back = 'title', data = {}, page = 0 }) {
+    const book = loadSave().recipeBook;
+    drawBackdrop(this);
+    const g = this.add.graphics();
+    g.fillStyle(0x000000, 0.25).fillRect(0, 0, W, H);
+    g.fillStyle(0x8a3a2a).fillRoundedRect(30, 24, W - 60, H - 48, 18); // the book's cover
+    g.fillStyle(COLORS.cream).fillRoundedRect(44, 36, W - 88, H - 72, 12);
+    if (book.length) g.lineStyle(2, COLORS.shojiLine).lineBetween(W / 2, 110, W / 2, H - 90);
+    this.add.text(W / 2, 64, BOOK.title, { fontFamily: TITLE_FONT, fontSize: '36px', color: '#2c3e6b', fontStyle: 'bold' }).setOrigin(0.5);
+    this.add.text(W / 2, 96, `${BOOK.subtitle} (${book.length})${book.length ? ` · ${BOOK.tapToRename}` : ''}`, { fontFamily: BODY_FONT, fontSize: '16px', color: '#6b5a48', fontStyle: 'italic' }).setOrigin(0.5);
+
+    if (book.length === 0) {
+      this.add.container(W / 2, 360, [drawNori(this, 0, 0)]).setScale(0.65); // wrapped so his breathing tween keeps its shape
+      this.add.text(W / 2, 140, `"${NORI.bookEmpty}"`, {
+        fontFamily: BODY_FONT, fontSize: '18px', color: '#2b2118', wordWrap: { width: 560 }, align: 'center',
+      }).setOrigin(0.5, 0);
+    }
+
+    const perPage = 8;
+    const pages = Math.max(1, Math.ceil(book.length / perPage));
+    page = Math.min(page, pages - 1);
+    book.slice(page * perPage, page * perPage + perPage).forEach((r, i) => {
+      // Two cards on each page of the open book.
+      const x = [157, 367, 593, 803][i % 4];
+      const y = 190 + Math.floor(i / 4) * 175;
+      this.add.graphics().fillStyle(0xf6ecd6).fillRoundedRect(x - 98, y - 70, 196, 160, 10);
+      this.add.text(x + 86, y - 60, '✎', { fontFamily: BODY_FONT, fontSize: '18px', color: '#6b5a48' }).setOrigin(1, 0);
+      const hit = this.add.zone(x, y + 10, 196, 160).setInteractive({ useHandCursor: true });
+      hit.on('pointerup', () => this.rename(r, { back, data, page }));
+      drawPlate(this, r.stack, r.rolled).setPosition(x, y - 28).setScale(0.6);
+      this.add.text(x, y + 6, r.name, {
+        fontFamily: TITLE_FONT, fontSize: '15px', color: '#d2452c', fontStyle: 'bold', wordWrap: { width: 180 }, align: 'center',
+      }).setOrigin(0.5, 0);
+      this.add.text(x, y + 46, starText(r.bestStars), { fontFamily: BODY_FONT, fontSize: '18px', color: '#e0a82e' }).setOrigin(0.5, 0);
+      this.add.text(x, y + 68, BOOK.madeFor(r.inventedFor), { fontFamily: BODY_FONT, fontSize: '12px', color: '#6b5a48' }).setOrigin(0.5, 0);
+    });
+
+    const flip = (p) => this.scene.restart({ back, data, page: p });
+    if (page > 0) button(this, 130, H - 66, '◀', () => flip(page - 1), 22);
+    if (page < pages - 1) button(this, W - 130, H - 66, '▶', () => flip(page + 1), 22);
+    if (pages > 1) this.add.text(W / 2, H - 112, `Page ${page + 1} of ${pages}`, { fontFamily: BODY_FONT, fontSize: '14px', color: '#6b5a48' }).setOrigin(0.5);
+    button(this, W / 2, H - 66, 'Back', () => this.scene.start(back, data), 22);
+  }
+
+  rename(recipe, where) {
+    this.input.enabled = false;
+    askForName(recipe.name, (name) => {
+      this.input.enabled = true;
+      if (name === null) return;
+      const save = loadSave();
+      renameRecipe(save, recipe.id, name);
+      writeSave(save);
+      this.scene.restart(where);
     });
   }
 }
@@ -595,5 +812,5 @@ window.game = new Phaser.Game({
   height: H,
   backgroundColor: '#f3e9d2',
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [TitleScene, BarScene, ResultsScene],
+  scene: [TitleScene, BarScene, ResultsScene, RecipeBookScene],
 });

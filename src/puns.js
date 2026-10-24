@@ -40,6 +40,55 @@ export const NORI = {
   wrongServe: "That's a cat-astrophe. They didn't order that.",
   spirit: "Oh great, a ghost. You're BOO-king a seat? Fine.",
   levelDone: 'Fin-ally. Shift over. Now let me nap.',
+
+  // Chef's choice orders, where the customer wants something new.
+  chefsChoice: "Chef's choice? They want us to INVENT something. Fine. Rice or nori first, then whatever they'd like.",
+  invent: {
+    rice_first: 'Even inventions start with RICE. Or nori, for a roll. Trash it.',
+    rice_after_nori: 'After the nori comes rice. Always. Without it, it is just a sad leaf. Trash it.',
+    not_a_topping: "Rice on top? Seaweed on top? That's not an invention, that's a cat-astrophe. Trash it.",
+    need_topping: 'Now the tasty part. Check what they love. Go wild. Not TOO wild.',
+    roll_it: "It's a roll, so roll it. Bamboo mat. Go.",
+    ready: "That's sushi. Serve it, or add one more thing. Your call.",
+  },
+  notNew: "That's just a plain old menu plate. Very brave. Very boring.",
+  newRecipe: 'A new recipe! Into the Recipe Book it goes. Don\'t let it go to your head.',
+  // What Nori says about a rating, by number of stars.
+  rating: {
+    1: "One star. I've had hairballs rated higher.",
+    2: 'Two stars. Hmph. We can do better than that.',
+    3: 'Three stars. Fine. Middle of the road, like a lazy cat.',
+    4: 'Four stars. Not bad. For a kitten.',
+    5: "Five stars?! Purr-fect. ...I taught you that, you know.",
+  },
+  bookEmpty: 'Empty. Like my food bowl. Serve a chef\'s choice order to invent something.',
+};
+
+// What each customer says when they want Nori to invent something.
+export const CHEFS_CHOICE_LINES = {
+  mouse: 'S-surprise me? Something with salmon? N-no tuna please.',
+  owl: 'Hoo, surprise me. Something with tuna, please.',
+  kitsune: 'Amaze me, dear. I adore salmon.',
+  dog: 'Surprise me! Tuna! Fast! No salmon! Woof!',
+  tanuki: 'Something new, chef. Put it on the tab. I like tuna.',
+  turtle: "Make me something new, young whiskers. I'm partial to salmon.",
+  lantern: 'Make up a recipe! With cucumber! No fish, it makes my flame go fishy!',
+  bunny: 'Invent me something! Cucumbers are hop-tastic!',
+  kappa: 'Chef\'s choice. Yes, cucumber. I know. No salmon.',
+  panda: 'Something new, please. Cucumber, no tuna. Bamboo-zle me!',
+};
+
+// Recipe Book wording.
+export const BOOK = {
+  title: 'Recipe Book',
+  subtitle: 'Your Cat-ventions',
+  button: 'Recipe Book',
+  madeFor: (name) => `Invented for ${name}`,
+  added: 'NEW RECIPE!\nAdded to your Recipe Book',
+  better: 'Better rating saved\nin your Recipe Book',
+  tapToRename: 'tap a recipe to rename it',
+  renameTitle: 'Name your recipe',
+  renameHint: "Nori says: make it a good one. Or a punny one. Ideally both.",
 };
 
 export const CUSTOMER_LINES = {

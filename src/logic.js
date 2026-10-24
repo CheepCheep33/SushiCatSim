@@ -75,3 +75,98 @@ export function starsFor(coins, targets) {
   for (const t of targets) if (coins >= t) stars++;
   return Math.max(1, stars);
 }
+
+// Chef's choice: about 7 in 100 customers ask Nori to invent something, at most once a level,
+// so about 1 in 4 five-customer levels has one.
+export const CHEFS_CHOICE_CHANCE = 0.07;
+export const CHEFS_CHOICE_PER_LEVEL = 1;
+export const COINS_PER_STAR = 4;
+// What can go on a nigiri or inside a roll. Rice and nori are the base, never the topping.
+export const TOPPINGS = ['salmon', 'tuna', 'cucumber'];
+
+// What each customer likes and won't eat, for chef's choice orders.
+export const TASTES = {
+  mouse: { likes: 'salmon', dislikes: ['tuna'] },
+  owl: { likes: 'tuna', dislikes: [] },
+  kitsune: { likes: 'salmon', dislikes: [] },
+  dog: { likes: 'tuna', dislikes: ['salmon'] },
+  tanuki: { likes: 'tuna', dislikes: [] },
+  turtle: { likes: 'salmon', dislikes: [] },
+  lantern: { likes: 'cucumber', dislikes: ['salmon', 'tuna'] },
+  bunny: { likes: 'cucumber', dislikes: [] },
+  kappa: { likes: 'cucumber', dislikes: ['salmon'] },
+  panda: { likes: 'cucumber', dislikes: ['tuna'] },
+};
+
+// Which customers in a level ask for chef's choice. The first customer always
+// orders off the menu, so the level's lesson comes first.
+export function pickChefsChoice(count, rng = Math.random, chance = CHEFS_CHOICE_CHANCE, max = CHEFS_CHOICE_PER_LEVEL) {
+  let picked = 0;
+  return Array.from({ length: count }, (_, i) => {
+    const pick = i > 0 && picked < max && rng() < chance;
+    if (pick) picked++;
+    return pick;
+  });
+}
+
+// Why an invented plate isn't proper sushi yet, or null if it is.
+// Nigiri is rice then toppings. Maki is nori, rice, fillings, then rolled.
+export function inventProblem(board, rolled = false) {
+  if (board.length === 0) return 'empty';
+  const maki = board[0] === 'nori';
+  const base = maki ? MAKI_BASE : ['rice'];
+  if (!maki && board[0] !== 'rice') return 'rice_first';
+  if (maki && board.length > 1 && board[1] !== 'rice') return 'rice_after_nori';
+  const fillings = board.slice(base.length);
+  if (fillings.some((ing) => !TOPPINGS.includes(ing))) return 'not_a_topping';
+  if (fillings.length === 0) return 'need_topping';
+  if (maki && !rolled) return 'roll_it';
+  return null;
+}
+
+// Mistakes that mean the plate has to go in the trash.
+export const INVENT_MISTAKES = ['rice_first', 'rice_after_nori', 'not_a_topping'];
+
+export function recipeId(board, rolled = false) {
+  return `${rolled ? 'roll' : 'nigiri'}:${board.join('+')}`;
+}
+
+// A name for an invented plate, after the customer who inspired it,
+// like "Kappa's Cucumber-Tuna Roll" or "Shy Mouse's Double Salmon Nigiri".
+export function inventedName(board, rolled, customerName) {
+  const fillings = board.slice(rolled ? MAKI_BASE.length : 1);
+  const names = [...new Set(fillings)].map((ing) => INGREDIENTS[ing].name);
+  const counts = { 2: 'Double ', 3: 'Triple ' };
+  const what = names.length === 1 ? (counts[fillings.length] ?? '') + names[0] : names.join('-');
+  return `${customerName}'s ${what} ${rolled ? 'Roll' : 'Nigiri'}`;
+}
+
+// Stars for a menu order: 5 for a clean plate, one off per mistake, never below 3
+// while you're still learning.
+export function rateOrder(mistakes = 0) {
+  return Math.max(3, 5 - mistakes);
+}
+
+// Stars for a chef's choice plate. One for real sushi, plus one each for:
+// something new, their favourite, nothing they hate, and no mistakes.
+export function rateChefsChoice(board, rolled, tastes, mistakes = 0) {
+  const reasons = {
+    isNew: matchRecipe(board, rolled) === null,
+    favorite: board.includes(tastes.likes),
+    noDislikes: !tastes.dislikes.some((ing) => board.includes(ing)),
+    clean: mistakes === 0,
+  };
+  const stars = 1 + Object.values(reasons).filter(Boolean).length;
+  return { stars, reasons };
+}
+
+// Serving a chef's choice plate. Not-yet-sushi plates come back with the problem.
+export function serveChefsChoice(board, { rolled = false, mistakes = 0, tastes, customerName }) {
+  const problem = inventProblem(board, rolled);
+  if (problem) return { ok: false, problem };
+  const { stars, reasons } = rateChefsChoice(board, rolled, tastes, mistakes);
+  const recipe = reasons.isNew
+    ? { id: recipeId(board, rolled), name: inventedName(board, rolled, customerName), stack: [...board], rolled }
+    : null;
+  return { ok: true, stars, reasons, coins: stars * COINS_PER_STAR, recipe, made: matchRecipe(board, rolled) };
+}
