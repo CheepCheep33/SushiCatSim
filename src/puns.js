@@ -86,6 +86,9 @@ export const BOOK = {
   madeFor: (name) => `Invented for ${name}`,
   added: 'NEW RECIPE!\nAdded to your Recipe Book',
   better: 'Better rating saved\nin your Recipe Book',
+  tapToRename: 'tap a recipe to rename it',
+  renameTitle: 'Name your recipe',
+  renameHint: "Nori says: make it a good one. Or a punny one. Ideally both.",
 };
 
 export const CUSTOMER_LINES = {

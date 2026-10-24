@@ -4,7 +4,7 @@ import {
 } from './logic.js';
 import { LEVELS } from './levels.js';
 import { NORI, CUSTOMER_LINES, CHEFS_CHOICE_LINES, THANKS, BOOK, pick } from './puns.js';
-import { loadSave, writeSave, addToRecipeBook } from './save.js';
+import { loadSave, writeSave, addToRecipeBook, renameRecipe, MAX_NAME } from './save.js';
 
 const W = 960;
 const H = 600;
@@ -716,7 +716,34 @@ class ResultsScene extends Phaser.Scene {
   }
 }
 
-// Every recipe the player has invented, eight to a page.
+// A plain HTML box over the game for typing a recipe's name, since a canvas can't take
+// typing (or bring up a tablet keyboard) on its own. Calls onDone with the text, or null.
+function askForName(current, onDone) {
+  const shade = document.createElement('div');
+  shade.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:10;';
+  shade.innerHTML = `
+    <form style="background:#fffaf0;border:3px solid #2b2118;border-radius:16px;padding:20px;width:min(380px,90vw);font-family:${BODY_FONT.replace(/"/g, "'")};color:#2b2118;">
+      <div style="font:bold 22px ${TITLE_FONT.replace(/"/g, "'")};color:#2c3e6b;margin-bottom:6px;">${BOOK.renameTitle}</div>
+      <div style="font-size:14px;color:#6b5a48;margin-bottom:12px;">${BOOK.renameHint}</div>
+      <input name="n" maxlength="${MAX_NAME}" autocomplete="off" style="box-sizing:border-box;width:100%;font-size:18px;padding:8px 10px;border:2px solid #c9b48a;border-radius:8px;">
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;">
+        <button type="button" data-cancel style="font-size:16px;padding:8px 14px;border:2px solid #2c3e6b;border-radius:8px;background:#fffaf0;color:#2c3e6b;">Cancel</button>
+        <button type="submit" style="font-size:16px;padding:8px 14px;border:0;border-radius:8px;background:#d2452c;color:#fffaf0;">Save</button>
+      </div>
+    </form>`;
+  const form = shade.querySelector('form');
+  const input = form.elements.n;
+  input.value = current;
+  const close = (value) => { shade.remove(); onDone(value); };
+  form.addEventListener('submit', (e) => { e.preventDefault(); close(input.value); });
+  shade.querySelector('[data-cancel]').addEventListener('click', () => close(null));
+  shade.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(null); });
+  document.body.appendChild(shade);
+  input.focus();
+  input.select();
+}
+
+// Every recipe the player has invented, eight to a page. Tap one to rename it.
 class RecipeBookScene extends Phaser.Scene {
   constructor() { super('book'); }
 
@@ -729,7 +756,7 @@ class RecipeBookScene extends Phaser.Scene {
     g.fillStyle(COLORS.cream).fillRoundedRect(44, 36, W - 88, H - 72, 12);
     if (book.length) g.lineStyle(2, COLORS.shojiLine).lineBetween(W / 2, 110, W / 2, H - 90);
     this.add.text(W / 2, 64, BOOK.title, { fontFamily: TITLE_FONT, fontSize: '36px', color: '#2c3e6b', fontStyle: 'bold' }).setOrigin(0.5);
-    this.add.text(W / 2, 96, `${BOOK.subtitle} (${book.length})`, { fontFamily: BODY_FONT, fontSize: '16px', color: '#6b5a48', fontStyle: 'italic' }).setOrigin(0.5);
+    this.add.text(W / 2, 96, `${BOOK.subtitle} (${book.length})${book.length ? ` · ${BOOK.tapToRename}` : ''}`, { fontFamily: BODY_FONT, fontSize: '16px', color: '#6b5a48', fontStyle: 'italic' }).setOrigin(0.5);
 
     if (book.length === 0) {
       this.add.container(W / 2, 360, [drawNori(this, 0, 0)]).setScale(0.65); // wrapped so his breathing tween keeps its shape
@@ -746,6 +773,9 @@ class RecipeBookScene extends Phaser.Scene {
       const x = [157, 367, 593, 803][i % 4];
       const y = 190 + Math.floor(i / 4) * 175;
       this.add.graphics().fillStyle(0xf6ecd6).fillRoundedRect(x - 98, y - 70, 196, 160, 10);
+      this.add.text(x + 86, y - 60, '✎', { fontFamily: BODY_FONT, fontSize: '18px', color: '#6b5a48' }).setOrigin(1, 0);
+      const hit = this.add.zone(x, y + 10, 196, 160).setInteractive({ useHandCursor: true });
+      hit.on('pointerup', () => this.rename(r, { back, data, page }));
       drawPlate(this, r.stack, r.rolled).setPosition(x, y - 28).setScale(0.6);
       this.add.text(x, y + 6, r.name, {
         fontFamily: TITLE_FONT, fontSize: '15px', color: '#d2452c', fontStyle: 'bold', wordWrap: { width: 180 }, align: 'center',
@@ -759,6 +789,18 @@ class RecipeBookScene extends Phaser.Scene {
     if (page < pages - 1) button(this, W - 130, H - 66, '▶', () => flip(page + 1), 22);
     if (pages > 1) this.add.text(W / 2, H - 112, `Page ${page + 1} of ${pages}`, { fontFamily: BODY_FONT, fontSize: '14px', color: '#6b5a48' }).setOrigin(0.5);
     button(this, W / 2, H - 66, 'Back', () => this.scene.start(back, data), 22);
+  }
+
+  rename(recipe, where) {
+    this.input.enabled = false;
+    askForName(recipe.name, (name) => {
+      this.input.enabled = true;
+      if (name === null) return;
+      const save = loadSave();
+      renameRecipe(save, recipe.id, name);
+      writeSave(save);
+      this.scene.restart(where);
+    });
   }
 }
 

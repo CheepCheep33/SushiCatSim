@@ -5,7 +5,7 @@ import {
   recipeId, TASTES, TOPPINGS, RECIPES, PERFECT_TIP, COINS_PER_STAR, MAX_BOARD, MAKI_BASE,
 } from '../src/logic.js';
 import { LEVELS } from '../src/levels.js';
-import { emptySave, loadSave, writeSave, addToRecipeBook, SAVE_KEY } from '../src/save.js';
+import { emptySave, loadSave, writeSave, addToRecipeBook, renameRecipe, SAVE_KEY, MAX_NAME } from '../src/save.js';
 
 const fakeStorage = () => {
   const data = {};
@@ -113,4 +113,17 @@ test('the Recipe Book saves, keeps the best rating, and survives a broken save',
   storage.setItem(SAVE_KEY, '{not json');
   assert.deepEqual(loadSave(storage), emptySave());
   assert.deepEqual(loadSave(null), emptySave());
+});
+
+test('recipes can be renamed in the book, and a blank name keeps the old one', () => {
+  const save = emptySave();
+  const recipe = { id: recipeId(['rice', 'tuna', 'tuna'], false), name: "Sleepy Owl's Double Tuna Nigiri", stack: ['rice', 'tuna', 'tuna'], rolled: false };
+  addToRecipeBook(save, recipe, { stars: 4, customer: 'Sleepy Owl' });
+  assert.equal(renameRecipe(save, recipe.id, '  The   Tuna  Tower '), 'The Tuna Tower');
+  assert.equal(renameRecipe(save, recipe.id, '   '), 'The Tuna Tower');
+  assert.equal(renameRecipe(save, recipe.id, 'x'.repeat(50)).length, MAX_NAME);
+  assert.equal(renameRecipe(save, 'nigiri:nope', 'Hi'), null);
+  // A later serve of the same plate keeps the player's name.
+  addToRecipeBook(save, recipe, { stars: 5, customer: 'Dog' });
+  assert.equal(save.recipeBook[0].name, 'x'.repeat(MAX_NAME));
 });

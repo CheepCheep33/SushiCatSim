@@ -9,7 +9,7 @@ About 3 in 10 customers (never the first of a level) order **Chef's Choice**: th
 - Menu orders: 5 stars for a clean plate, one less per mistake, never below 3.
 - Chef's choice: 1 star for real sushi (rice then toppings, or a rolled nori-rice-filling maki), plus 1 each for being new (not a menu plate), using their favourite, leaving out what they hate, and no mistakes. It pays 4 coins per star.
 
-New inventions are saved in the **Recipe Book** (title screen or end of a shift), named after the customer who asked, like "Kappa's Cucumber-Tuna Roll". It lives in the browser's localStorage, so it stays between visits on the same device.
+New inventions are saved in the **Recipe Book** (title screen or end of a shift), named after the customer who asked, like "Kappa's Cucumber-Tuna Roll". Tap a recipe in the book to give it your own name. It lives in the browser's localStorage, so it stays between visits on the same device.
 
 The design plan lives in the [game design doc](https://claude.ai/artifact/GVU7KHzPCkyxkKstf7FEHe).
 

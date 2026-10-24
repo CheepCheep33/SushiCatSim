@@ -39,3 +39,15 @@ export function addToRecipeBook(save, recipe, { stars, customer, at = Date.now()
   existing.bestStars = stars;
   return 'better';
 }
+
+export const MAX_NAME = 32;
+
+// Gives an invented recipe the player's own name. A blank name keeps the old one.
+// Returns the name it ended up with, or null if there's no such recipe.
+export function renameRecipe(save, id, name) {
+  const recipe = save.recipeBook.find((r) => r.id === id);
+  if (!recipe) return null;
+  const clean = String(name ?? '').replace(/\s+/g, ' ').trim().slice(0, MAX_NAME);
+  if (clean) recipe.name = clean;
+  return recipe.name;
+}
