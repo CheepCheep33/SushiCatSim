@@ -123,7 +123,7 @@ export const RESET = {
   link: 'Reset progress (grown-ups)',
   title: 'Reset progress?',
   body: 'This wipes all stars, unlocked levels and coins, and starts again from Level 1.',
-  keepsBook: 'The Recipe Book stays.',
+  clearBook: 'Also clear the Recipe Book',
   typeIt: 'Type RESET to confirm.',
   button: 'Reset',
 };
