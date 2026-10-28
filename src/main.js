@@ -358,10 +358,10 @@ class TitleScene extends Phaser.Scene {
         .setOrigin(1, 1).setInteractive({ useHandCursor: true });
       reset.on('pointerup', () => {
         this.input.enabled = false;
-        askToReset((ok) => {
+        askToReset((ok, clearBook) => {
           this.input.enabled = true;
           if (!ok) return;
-          writeSave(resetProgress(loadSave()));
+          writeSave(resetProgress(loadSave(), { keepRecipes: !clearBook }));
           this.scene.restart();
         });
       });
@@ -895,8 +895,9 @@ class MapScene extends Phaser.Scene {
 }
 
 // A plain HTML box over the game with one text box, since a canvas can't take typing
-// (or bring up a tablet keyboard) on its own. Calls onDone with the text, or null.
-function textDialog({ title, hint, ok, maxLength = 40 }, current, onDone) {
+// (or bring up a tablet keyboard) on its own. Calls onDone with the text (or null), and
+// whether the optional checkbox was ticked.
+function textDialog({ title, hint, ok, maxLength = 40, checkbox = null }, current, onDone) {
   const shade = document.createElement('div');
   shade.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:10;';
   shade.innerHTML = `
@@ -904,6 +905,7 @@ function textDialog({ title, hint, ok, maxLength = 40 }, current, onDone) {
       <div style="font:bold 22px ${TITLE_FONT.replace(/"/g, "'")};color:#2c3e6b;margin-bottom:6px;">${title}</div>
       <div style="font-size:14px;color:#6b5a48;margin-bottom:12px;">${hint}</div>
       <input name="n" maxlength="${maxLength}" autocomplete="off" style="box-sizing:border-box;width:100%;font-size:18px;padding:8px 10px;border:2px solid #c9b48a;border-radius:8px;">
+      ${checkbox ? `<label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:15px;"><input type="checkbox" name="c" style="width:18px;height:18px;accent-color:#d2452c;">${checkbox}</label>` : ''}
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;">
         <button type="button" data-cancel style="font-size:16px;padding:8px 14px;border:2px solid #2c3e6b;border-radius:8px;background:#fffaf0;color:#2c3e6b;">Cancel</button>
         <button type="submit" style="font-size:16px;padding:8px 14px;border:0;border-radius:8px;background:#d2452c;color:#fffaf0;">${ok}</button>
@@ -912,7 +914,7 @@ function textDialog({ title, hint, ok, maxLength = 40 }, current, onDone) {
   const form = shade.querySelector('form');
   const input = form.elements.n;
   input.value = current;
-  const close = (value) => { shade.remove(); onDone(value); };
+  const close = (value) => { shade.remove(); onDone(value, !!form.elements.c?.checked); };
   form.addEventListener('submit', (e) => { e.preventDefault(); close(input.value); });
   shade.querySelector('[data-cancel]').addEventListener('click', () => close(null));
   shade.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(null); });
@@ -925,10 +927,11 @@ function askForName(current, onDone) {
   textDialog({ title: BOOK.renameTitle, hint: BOOK.renameHint, ok: 'Save', maxLength: MAX_NAME }, current, onDone);
 }
 
-// Resetting needs RESET typed out, so it can't happen by a stray tap. Calls onDone(true or false).
+// Resetting needs RESET typed out, so it can't happen by a stray tap. The Recipe Book
+// stays unless the grown-up ticks the box. Calls onDone(confirmed, clearBook).
 function askToReset(onDone) {
-  textDialog({ title: RESET.title, hint: `${RESET.body} ${RESET.keepsBook} ${RESET.typeIt}`, ok: RESET.button }, '',
-    (text) => onDone(text?.trim().toUpperCase() === 'RESET'));
+  textDialog({ title: RESET.title, hint: `${RESET.body} ${RESET.typeIt}`, ok: RESET.button, checkbox: RESET.clearBook }, '',
+    (text, clearBook) => onDone(text?.trim().toUpperCase() === 'RESET', clearBook));
 }
 
 // Every recipe the player has invented, eight to a page. Tap one to rename it.
