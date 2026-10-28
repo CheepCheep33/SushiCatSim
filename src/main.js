@@ -1,5 +1,5 @@
 import {
-  INGREDIENTS, RECIPES, MAX_BOARD, MAKI_BASE, TASTES, INVENT_MISTAKES, servePlate, boardHint, rollProblem, starsFor,
+  INGREDIENTS, RECIPES, MAX_BOARD, MAX_TOPPINGS, MAKI_BASE, TASTES, INVENT_MISTAKES, servePlate, boardHint, rollProblem, starsFor,
   pickChefsChoice, inventProblem, serveChefsChoice, rateOrder,
 } from './logic.js';
 import { LEVELS, MAP_SLOTS } from './levels.js';
@@ -60,6 +60,37 @@ function makeTextures(scene) {
   g.fillStyle(0x8cc45a);
   for (let i = 0; i < 6; i++) g.fillCircle(16 + i * 15, 11, 2);
   g.generateTexture('cucumber', 104, 22);
+  g.clear();
+
+  // Eel (unagi): a brown grilled slice with dark glaze stripes.
+  g.fillStyle(INGREDIENTS.eel.color).fillRoundedRect(0, 0, 112, 26, 12);
+  g.lineStyle(4, 0x5a2e12, 0.8);
+  for (let i = 0; i < 6; i++) g.lineBetween(14 + i * 16, 4, 14 + i * 16, 22);
+  g.fillStyle(0xd89a5a, 0.6).fillRoundedRect(8, 4, 96, 5, 2); // shine
+  g.generateTexture('eel', 112, 26);
+  g.clear();
+
+  // Avocado: thin green slices fanned out in a row.
+  g.fillStyle(0x3f6a22).fillRoundedRect(0, 0, 104, 24, 11);
+  g.fillStyle(INGREDIENTS.avocado.color).fillRoundedRect(3, 5, 98, 16, 8);
+  g.lineStyle(2, 0x6f9a3a, 0.9);
+  for (let i = 1; i < 7; i++) g.lineBetween(i * 15, 5, i * 15 - 4, 21);
+  g.generateTexture('avocado', 104, 24);
+  g.clear();
+
+  // Sesame: a sprinkle of pale seeds, with a few black ones.
+  for (let i = 0; i < 14; i++) {
+    g.fillStyle(i % 4 === 3 ? 0x2a2420 : INGREDIENTS.sesame.color).fillEllipse(6 + i * 6.4, 6 + (i % 3) * 4, 6, 4);
+  }
+  g.generateTexture('sesame', 96, 18);
+  g.clear();
+
+  // Sauce: a dark, sweet eel-sauce drizzle.
+  g.lineStyle(6, INGREDIENTS.sauce.color);
+  g.beginPath().moveTo(4, 10);
+  for (let i = 1; i <= 8; i++) g.lineTo(4 + i * 12, i % 2 ? 4 : 14);
+  g.strokePath();
+  g.generateTexture('sauce', 104, 18);
   g.clear();
 
   // Bamboo rolling mat (makisu): slats with string ties.
@@ -165,6 +196,7 @@ const CUSTOMER_LOOKS = {
   bunny: { fur: 0xf2efe8, inner: 0xf0b8c0, ears: 'long' },
   kappa: { fur: 0x5fa86a, inner: 0xe8d070, ears: 'none' },
   panda: { fur: 0xf6f4ee, inner: 0xffffff, ears: 'round', earColor: 0x1c1c1c },
+  dragon: { fur: 0x5fbf8a, inner: 0xd8f0c0, ears: 'horns', scale: 0.85 },
 };
 
 function drawCustomer(scene, x, y, cust) {
@@ -194,6 +226,11 @@ function drawCustomer(scene, x, y, cust) {
     g.lineStyle(4, 0x6a5a3a).lineBetween(-16, -64, -40, -112).lineBetween(16, -64, 40, -112);
     g.fillStyle(0x6a5a3a).fillEllipse(-42, -114, 18, 10).fillEllipse(42, -114, 18, 10);
     g.fillStyle(0xe8d8b0, 0.9).fillEllipse(-62, 60, 50, 80).fillEllipse(62, 60, 50, 80); // wings
+  } else if (look.ears === 'horns') {
+    // Two little golden horns and a red mane, like a festival dragon.
+    g.fillStyle(0xd2452c).fillCircle(-44, -40, 18).fillCircle(44, -40, 18).fillCircle(0, -66, 20);
+    g.fillStyle(0xf2d27a).fillTriangle(-34, -56, -46, -112, -14, -66).fillTriangle(34, -56, 46, -112, 14, -66);
+    g.fillStyle(look.fur);
   } else if (look.ears === 'none') {
     // No ears.
   } else if (look.ears === 'pointy') {
@@ -227,6 +264,14 @@ function drawCustomer(scene, x, y, cust) {
   if (cust.kind === 'kappa') {
     g.fillStyle(0xe8a13a).fillTriangle(-10, 0, 10, 0, 0, 14); // beak
   }
+  if (cust.kind === 'dragon') {
+    // Long curly dragon whiskers, and scales down the tummy.
+    g.lineStyle(3, 0xf2d27a);
+    g.beginPath().moveTo(-14, 10).lineTo(-50, 14).lineTo(-70, 0).strokePath();
+    g.beginPath().moveTo(14, 10).lineTo(50, 14).lineTo(70, 0).strokePath();
+    g.fillStyle(0xf2d27a);
+    for (let i = 0; i < 3; i++) g.fillEllipse(0, 66 + i * 22, 50 - i * 8, 14);
+  }
   if (cust.kind === 'bunny') {
     g.fillStyle(COLORS.indigo).fillRect(-50, 64, 100, 10); // backpack strap
   }
@@ -255,33 +300,53 @@ function drawStack(scene, stack) {
   for (const ing of stack) {
     const img = scene.add.image(0, y, ing);
     c.add(img);
-    y -= ing === 'rice' ? 24 : ing === 'nori' ? 10 : 16;
+    y -= ing === 'rice' ? 24 : ['nori', 'sesame', 'sauce'].includes(ing) ? 10 : 16;
   }
   return c;
 }
 
-// A rolled maki cut into three pieces, showing its fillings. Made the first time it's needed.
-function makiTexture(scene, fillings) {
-  const key = `maki_${fillings.join('_')}`;
+// One topping draped over the top of a maki piece at (cx, y).
+function drawTopping(g, ing, cx, y) {
+  if (ing === 'sesame') {
+    for (let k = 0; k < 7; k++) g.fillStyle(k % 3 === 2 ? 0x2a2420 : INGREDIENTS.sesame.color).fillEllipse(cx - 14 + k * 4.7, y + (k % 2) * 3, 4, 3);
+  } else if (ing === 'sauce') {
+    g.lineStyle(3, INGREDIENTS.sauce.color);
+    g.beginPath().moveTo(cx - 16, y);
+    for (let k = 1; k <= 4; k++) g.lineTo(cx - 16 + k * 8, y + (k % 2 ? -3 : 3));
+    g.strokePath();
+  } else {
+    // Avocado and fish lie on top as a thin slice, with a darker edge.
+    const edge = { avocado: 0x3f6a22, eel: 0x5a2e12, salmon: 0xc86a3a, tuna: 0x8a1f30, cucumber: 0x2f6a22 }[ing] ?? COLORS.ink;
+    g.fillStyle(edge).fillEllipse(cx, y, 42, 14);
+    g.fillStyle(INGREDIENTS[ing].color).fillEllipse(cx, y - 1, 38, 10);
+  }
+}
+
+// A rolled maki cut into three pieces, showing its fillings, with any toppings on top.
+// Made the first time it's needed.
+function makiTexture(scene, fillings, toppings = []) {
+  const key = `maki_${fillings.join('_')}${toppings.length ? `__${toppings.join('_')}` : ''}`;
   if (scene.textures.exists(key)) return key;
   const g = scene.add.graphics();
+  const cy = toppings.length ? 38 : 22; // fancy rolls need room above for the toppings
   for (let i = 0; i < 3; i++) {
     const cx = 22 + i * 40;
-    g.fillStyle(INGREDIENTS.nori.color).fillCircle(cx, 22, 20);
-    g.fillStyle(INGREDIENTS.rice.color).fillCircle(cx, 22, 15);
-    if (fillings.length === 1) g.fillStyle(INGREDIENTS[fillings[0]].color).fillCircle(cx, 22, 7);
-    else fillings.forEach((ing, j) => g.fillStyle(INGREDIENTS[ing].color).fillCircle(cx - 4 + j * 8, 22, 5));
+    g.fillStyle(INGREDIENTS.nori.color).fillCircle(cx, cy, 20);
+    g.fillStyle(INGREDIENTS.rice.color).fillCircle(cx, cy, 15);
+    if (fillings.length === 1) g.fillStyle(INGREDIENTS[fillings[0]].color).fillCircle(cx, cy, 7);
+    else fillings.forEach((ing, j) => g.fillStyle(INGREDIENTS[ing].color).fillCircle(cx - 4 + j * 8, cy, 5));
+    toppings.forEach((ing, j) => drawTopping(g, ing, cx, cy - 18 - j * 5));
   }
-  g.generateTexture(key, 124, 44);
+  g.generateTexture(key, 124, cy + 22);
   g.destroy();
   return key;
 }
 
-// A plate: a loose stack, or once rolled, cut maki pieces showing the filling.
-function drawPlate(scene, stack, rolled) {
+// A plate: a loose stack, or once rolled, cut maki pieces showing the filling and toppings.
+function drawPlate(scene, stack, rolled, toppings = []) {
   if (!rolled) return drawStack(scene, stack);
-  const key = makiTexture(scene, stack.slice(MAKI_BASE.length));
-  return scene.add.container(0, 0, [scene.add.image(0, 10, key)]);
+  const key = makiTexture(scene, stack.slice(MAKI_BASE.length), toppings);
+  return scene.add.container(0, 0, [scene.add.image(0, toppings.length ? 2 : 10, key)]);
 }
 
 function starText(stars, max = 5) {
@@ -377,6 +442,7 @@ class BarScene extends Phaser.Scene {
     this.levelIndex = data.level ?? 0;
     this.board = [];
     this.rolled = false;
+    this.toppings = [];
     this.coins = 0;
     this.served = 0;
     this.customerIndex = -1;
@@ -410,6 +476,7 @@ class BarScene extends Phaser.Scene {
     const mat = this.level.rollingMat;
     this.boardX = mat ? 580 : 560;
     this.makeBins(mat ? { x: 56, step: 88, scale: 0.85 } : { x: 80, step: 110, scale: 1 });
+    if (this.level.tray) this.makeTray();
     this.boardImage = this.add.image(this.boardX, 470, 'board');
     this.boardZone = new Phaser.Geom.Rectangle(this.boardX - 130, 470 - 75, 260, 150);
     if (mat) {
@@ -442,6 +509,29 @@ class BarScene extends Phaser.Scene {
       const binW = 100 / 0.8;
       const binH = 84 / 0.8;
       const hitArea = new Phaser.Geom.Rectangle(piece.width / 2 - binW / 2, piece.height / 2 - binH / 2, binW, binH);
+      piece.setInteractive({ hitArea, hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true, draggable: true });
+      piece.setData({ kind: 'ingredient', ingredient: ing, home: { x, y } });
+    });
+  }
+
+  // Fancy-roll toppings sit in little dishes on a lacquer tray on the counter.
+  makeTray() {
+    const tray = this.level.tray;
+    const cx = 430;
+    const step = 90;
+    const left = cx - (tray.length - 1) * step / 2;
+    const g = this.add.graphics();
+    g.fillStyle(0x2a1210).fillRoundedRect(left - 50, 328, (tray.length - 1) * step + 100, 74, 12);
+    g.fillStyle(0x8a2a1f).fillRoundedRect(left - 44, 332, (tray.length - 1) * step + 88, 64, 9);
+    tray.forEach((ing, i) => {
+      const x = left + i * step;
+      const y = 352;
+      g.fillStyle(0xd8d0c0).fillEllipse(x, y + 3, 80, 36);
+      g.fillStyle(COLORS.cream).fillEllipse(x, y, 76, 32);
+      this.add.text(x, 372, INGREDIENTS[ing].name, { fontFamily: BODY_FONT, fontSize: '14px', color: '#fffaf0' }).setOrigin(0.5, 0);
+      const scale = 0.55;
+      const piece = this.add.image(x, y, ing).setScale(scale);
+      const hitArea = new Phaser.Geom.Rectangle(piece.width / 2 - 44 / scale, piece.height / 2 - 30 / scale, 88 / scale, 60 / scale);
       piece.setInteractive({ hitArea, hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true, draggable: true });
       piece.setData({ kind: 'ingredient', ingredient: ing, home: { x, y } });
     });
@@ -498,6 +588,8 @@ class BarScene extends Phaser.Scene {
       this.say(NORI.chefsChoice);
     } else if (this.customerIndex > 0) {
       if (cust.kind === 'lantern') this.say(NORI.spiritKid);
+      else if (cust.kind === 'dragon') this.say(NORI.dragonSpirit);
+      else if (recipe.toppings) this.say(NORI.nextFancy);
       else if (cust.spirit) this.say(NORI.spirit);
       else if (recipe.rolled) this.say(NORI.nextMaki);
       else this.say(this.taughtRice ? NORI.nextNigiri : NORI.intro);
@@ -505,15 +597,24 @@ class BarScene extends Phaser.Scene {
   }
 
   menuBubble(cust, recipe) {
-    const icon = drawPlate(this, recipe.stack, recipe.rolled);
-    icon.setPosition(670, 180).setScale(0.75);
+    const icon = drawPlate(this, recipe.stack, recipe.rolled, recipe.toppings);
+    icon.setPosition(670, 180).setScale(recipe.toppings ? 0.9 : 0.75);
     const name = this.add.text(670, 225, recipe.name, {
       fontFamily: TITLE_FONT, fontSize: '18px', color: '#d2452c', fontStyle: 'bold',
     }).setOrigin(0.5);
-    const words = this.add.text(670, 245, `"${CUSTOMER_LINES[cust.kind]}"`, {
+    // Fancy rolls spell out their toppings too, since they're small in the picture.
+    const parts = [icon, name];
+    let y = 245;
+    if (recipe.toppings) {
+      parts.push(this.add.text(670, 241, `on top: ${recipe.toppings.map((ing) => INGREDIENTS[ing].name.toLowerCase()).join(' + ')}`, {
+        fontFamily: BODY_FONT, fontSize: '12px', color: '#2c3e6b', fontStyle: 'bold', wordWrap: { width: 156 }, align: 'center',
+      }).setOrigin(0.5, 0));
+      y += 18;
+    }
+    parts.push(this.add.text(670, y, `"${cust.line ?? CUSTOMER_LINES[cust.kind]}"`, {
       fontFamily: BODY_FONT, fontSize: '13px', color: '#2b2118', wordWrap: { width: 150 }, align: 'center',
-    }).setOrigin(0.5, 0);
-    return [icon, name, words];
+    }).setOrigin(0.5, 0));
+    return parts;
   }
 
   // A chef's choice order shows what they love and what they won't eat, in pictures.
@@ -542,6 +643,7 @@ class BarScene extends Phaser.Scene {
   clearBoard() {
     this.board = [];
     this.rolled = false;
+    this.toppings = [];
     this.rebuildPlate();
   }
 
@@ -549,7 +651,7 @@ class BarScene extends Phaser.Scene {
     this.plate?.destroy();
     this.plate = null;
     if (this.board.length === 0) return;
-    const stack = drawPlate(this, this.board, this.rolled);
+    const stack = drawPlate(this, this.board, this.rolled, this.toppings);
     this.plate = this.add.container(this.boardX, 470, [stack]);
     this.plate.setSize(240, 120); // the whole cutting board is the handle
     this.plate.setInteractive({ useHandCursor: true, draggable: true });
@@ -578,7 +680,8 @@ class BarScene extends Phaser.Scene {
 
   addToBoard(ing) {
     if (this.rolled) {
-      this.say(NORI.rolledFull);
+      if (this.level.tray) this.addTopping(ing);
+      else this.say(NORI.rolledFull);
       return;
     }
     if (this.board.length >= MAX_BOARD) {
@@ -593,14 +696,37 @@ class BarScene extends Phaser.Scene {
       this.say(NORI.invent[problem]);
       return;
     }
+    this.sayHint(boardHint(this.customer.order, this.board));
+  }
+
+  // Once a fancy roll is rolled, whatever's dropped on it is a topping.
+  addTopping(ing) {
+    if (this.toppings.length >= MAX_TOPPINGS) {
+      this.say(NORI.tooManyToppings);
+      return;
+    }
+    this.toppings.push(ing);
+    this.rebuildPlate();
+    if (this.inventing) {
+      const problem = inventProblem(this.board, true, this.toppings) ?? 'ready';
+      if (INVENT_MISTAKES.includes(problem)) this.mistakes++;
+      this.say(NORI.invent[problem]);
+      return;
+    }
+    this.sayHint(boardHint(this.customer.order, this.board, true, this.toppings));
+  }
+
+  // What Nori says about a menu order's board, counting any mistake.
+  sayHint(hint) {
     const recipe = RECIPES[this.customer.order];
-    const hint = boardHint(this.customer.order, this.board);
     const mistakeLines = {
-      rice_first: NORI.riceFirst, nori_first: NORI.noriFirst, too_much: NORI.tooMuch,
-      wrong_order: NORI.wrongOrder, wrong_topping: NORI.wrongTopping,
+      rice_first: NORI.riceFirst, nori_first: NORI.noriFirst, too_much: this.rolled ? NORI.tooManyToppings : NORI.tooMuch,
+      wrong_order: NORI.wrongOrder, wrong_topping: NORI.wrongTopping, roll_first: NORI.rollFirst, sauce_last: NORI.sauceLast,
     };
     if (mistakeLines[hint]) { this.mistakes++; this.say(mistakeLines[hint]); }
     else if (hint === 'roll_it') this.say(NORI.rollIt);
+    else if (hint === 'add_toppings') this.say(NORI.rolledFancy);
+    else if (hint === 'more_toppings') this.say(NORI.moreToppings);
     else if (hint === 'ready') this.say(NORI.ready);
     else if (recipe.rolled) this.say(NORI.makiSteps[this.board.length]);
     else if (this.board.length === 1) { this.taughtRice = true; this.say(NORI.afterRice); }
@@ -622,11 +748,15 @@ class BarScene extends Phaser.Scene {
         this.rolled = true;
         this.rebuildPlate();
         if (this.inventing) {
-          this.say(inventProblem(this.board, true) ? NORI.invent.not_a_topping : NORI.rolled);
+          const problem = inventProblem(this.board, true);
+          if (problem) this.say(NORI.invent[problem] ?? NORI.invent.not_a_topping);
+          else this.say(this.level.tray ? NORI.inventRolledFancy : NORI.rolled);
           return;
         }
         const hint = boardHint(this.customer.order, this.board, true);
-        this.say(hint === 'ready' ? NORI.rolled : NORI.wrongTopping);
+        if (hint === 'add_toppings') this.say(NORI.rolledFancy);
+        else if (hint === 'ready') this.say(this.level.tray ? NORI.rolledPlain : NORI.rolled);
+        else this.say(NORI.wrongTopping);
       },
     });
     this.tweens.add({ targets: this.mat, angle: { from: -4, to: 4 }, delay: 150, duration: 100, yoyo: true, repeat: 1, onComplete: () => this.mat.setAngle(0) });
@@ -637,11 +767,11 @@ class BarScene extends Phaser.Scene {
       this.serveInvention();
       return;
     }
-    const result = servePlate(this.customer.order, this.board, { mistakes: this.mistakes, rolled: this.rolled });
-    if (result.needsRoll) {
-      // Right stack, just not rolled yet: send it back to the board instead of wasting it.
+    const result = servePlate(this.customer.order, this.board, { mistakes: this.mistakes, rolled: this.rolled, toppings: this.toppings });
+    if (result.needsRoll || result.needsToppings) {
+      // Right so far, just not finished: send it back to the board instead of wasting it.
       this.rebuildPlate();
-      this.say(NORI.needsRoll);
+      this.say(result.needsRoll ? NORI.needsRoll : NORI.needsToppings);
       return;
     }
     this.clearBoard();
@@ -659,7 +789,7 @@ class BarScene extends Phaser.Scene {
   serveInvention() {
     const cust = this.customer;
     const result = serveChefsChoice(this.board, {
-      rolled: this.rolled, mistakes: this.mistakes, tastes: TASTES[cust.kind], customerName: cust.name,
+      rolled: this.rolled, toppings: this.toppings, mistakes: this.mistakes, tastes: TASTES[cust.kind], customerName: cust.name,
     });
     if (!result.ok) {
       // Not sushi yet: hand it back so it can be finished or trashed.
@@ -669,7 +799,7 @@ class BarScene extends Phaser.Scene {
       this.tweens.add({ targets: this.customerSprite, x: '+=10', duration: 60, yoyo: true, repeat: 3 });
       return;
     }
-    const plate = { stack: [...this.board], rolled: this.rolled };
+    const plate = { stack: [...this.board], rolled: this.rolled, toppings: [...this.toppings] };
     this.clearBoard();
     let note = null;
     if (result.recipe) {
@@ -688,9 +818,10 @@ class BarScene extends Phaser.Scene {
   // A little card that pops up over the board when the Recipe Book changes.
   showRecipeNote(note, name, plate) {
     const g = this.add.graphics();
-    g.fillStyle(COLORS.cream).fillRoundedRect(-140, -70, 280, 140, 14);
-    g.lineStyle(3, COLORS.vermilion).strokeRoundedRect(-140, -70, 280, 140, 14);
-    const dish = drawPlate(this, plate.stack, plate.rolled).setScale(0.6).setPosition(0, 2);
+    // Tall enough for a two-line name, like a fancy roll's "with Salmon and Sauce".
+    g.fillStyle(COLORS.cream).fillRoundedRect(-140, -70, 280, 156, 14);
+    g.lineStyle(3, COLORS.vermilion).strokeRoundedRect(-140, -70, 280, 156, 14);
+    const dish = drawPlate(this, plate.stack, plate.rolled, plate.toppings).setScale(0.6).setPosition(0, 2);
     const card = this.add.container(this.boardX, 470, [
       g,
       this.add.text(0, -50, note, { fontFamily: TITLE_FONT, fontSize: '16px', color: '#d2452c', fontStyle: 'bold', align: 'center' }).setOrigin(0.5, 0),
@@ -967,7 +1098,7 @@ class RecipeBookScene extends Phaser.Scene {
       this.add.text(x + 86, y - 60, '✎', { fontFamily: BODY_FONT, fontSize: '18px', color: '#6b5a48' }).setOrigin(1, 0);
       const hit = this.add.zone(x, y + 10, 196, 160).setInteractive({ useHandCursor: true });
       hit.on('pointerup', () => this.rename(r, { back, data, page }));
-      drawPlate(this, r.stack, r.rolled).setPosition(x, y - 28).setScale(0.6);
+      drawPlate(this, r.stack, r.rolled, r.toppings).setPosition(x, y - 28).setScale(0.6);
       this.add.text(x, y + 6, r.name, {
         fontFamily: TITLE_FONT, fontSize: '15px', color: '#d2452c', fontStyle: 'bold', wordWrap: { width: 180 }, align: 'center',
       }).setOrigin(0.5, 0);

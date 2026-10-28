@@ -81,6 +81,9 @@ test('level data only uses known recipes and ingredients, and 3 stars is reachab
     for (const c of level.customers) {
       assert.ok(level.menu.includes(c.order), c.order);
       for (const ing of RECIPES[c.order].stack) assert.ok(level.ingredients.includes(ing), ing);
+      for (const ing of RECIPES[c.order].toppings ?? []) {
+        assert.ok([...level.ingredients, ...(level.tray ?? [])].includes(ing), `level ${level.id} needs ${ing}`);
+      }
       if (RECIPES[c.order].rolled) assert.ok(level.rollingMat, `level ${level.id} needs a rolling mat`);
     }
     const perfect = level.customers.reduce((sum, c) => sum + RECIPES[c.order].price + PERFECT_TIP, 0);

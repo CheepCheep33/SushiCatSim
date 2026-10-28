@@ -6,6 +6,7 @@ export const NORI = {
   // Said when a level starts, by level id. Falls back to intro.
   levelIntro: {
     2: "Let's get this roll-ing. Maki time. Drag the NORI onto the board first.",
+    3: 'Fancy rolls. Toppings go on AFTER you roll it. Start with the NORI, as always.',
   },
   nextNigiri: 'Next customer. Rice first, then the fish. You know this.',
   nextMaki: 'A maki order. Nori, rice, filling, then roll it. Chop chop.',
@@ -19,6 +20,15 @@ export const NORI = {
   wrongOrder: "Wrong order, kitten. Nori, then rice, then filling. Trash it and try again.",
   rollIt: "Now drag the whole plate onto the bamboo mat. Let's get this roll-ing.",
   rolled: 'Rolled. Look at that. Barely a disaster. Now serve it.',
+  // Fancy rolls, with toppings from the tray on the counter.
+  nextFancy: 'A fancy roll. Nori, rice, filling, roll it, THEN the toppings. Check the bubble.',
+  rolledFancy: 'Rolled. Now dress it up. Drag the toppings from the bubble onto it.',
+  moreToppings: 'Ooh, fancy. Keep going. Check the bubble for the rest.',
+  rollFirst: "Toppings go on AFTER it's rolled, kitten. Now they're stuck inside. Trash it.",
+  sauceLast: 'Sauce goes on LAST. Like a bow on a present. Trash it.',
+  needsToppings: "It's naked! Where are the toppings? Back to the board with it.",
+  tooManyToppings: "That's a topping avalanche, not a roll. Trash it.",
+  rolledPlain: 'Rolled. This one gets NO toppings. Plain and simple, like my mood. Serve it.',
   needNori: "You can't roll that without nori. It'd just be a sad rice blanket.",
   tooSmall: 'Not done yet. Finish the stack, THEN roll it.',
   alreadyRolled: "It's already rolled. Roll it again and it's a carpet.",
@@ -39,6 +49,7 @@ export const NORI = {
   ],
   wrongServe: "That's a cat-astrophe. They didn't order that.",
   spirit: "Oh great, a ghost. You're BOO-king a seat? Fine.",
+  dragonSpirit: 'A baby dragon spirit. Do NOT sneeze on my counter. What do you want?',
   levelDone: 'Fin-ally. Shift over. Now let me nap.',
 
   // Chef's choice orders, where the customer wants something new.
@@ -50,7 +61,11 @@ export const NORI = {
     need_topping: 'Now the tasty part. Check what they love. Go wild. Not TOO wild.',
     roll_it: "It's a roll, so roll it. Bamboo mat. Go.",
     ready: "That's sushi. Serve it, or add one more thing. Your call.",
+    garnish_inside: "Sesame and sauce go ON TOP, after rolling. Not inside. Trash it.",
+    sauce_last: 'Sauce goes on LAST. Like a bow on a present. Trash it.',
   },
+  // Said after rolling an invention in a level with a topping tray.
+  inventRolledFancy: 'Rolled. Serve it plain, or put some toppings on. Go wild. Not TOO wild.',
   notNew: "That's just a plain old menu plate. Very brave. Very boring.",
   newRecipe: 'A new recipe! Into the Recipe Book it goes. Don\'t let it go to your head.',
   // What Nori says about a rating, by number of stars.
@@ -76,6 +91,7 @@ export const CHEFS_CHOICE_LINES = {
   bunny: 'Invent me something! Cucumbers are hop-tastic!',
   kappa: 'Chef\'s choice. Yes, cucumber. I know. No salmon.',
   panda: 'Something new, please. Cucumber, no tuna. Bamboo-zle me!',
+  dragon: 'Surprise me, chef! Something with eel. No cucumber, it tastes like a lawn.',
 };
 
 // Recipe Book wording.
@@ -139,6 +155,7 @@ export const CUSTOMER_LINES = {
   bunny: 'Salmon nigiri! Hop to it! I mean, please!',
   kappa: 'Tuna maki. Everyone thinks kappa only eat cucumber. Shell-ocking, I know.',
   panda: 'Cucumber roll, please. I like anything that comes in a bamboo mat.',
+  dragon: "One dragon roll! No, it's not made of dragons. I checked.",
 };
 
 export const THANKS = {
@@ -152,6 +169,7 @@ export const THANKS = {
   bunny: 'Some-bunny here is a great chef!',
   kappa: 'Water-ful roll. I mean wonderful.',
   panda: "Bam-boo-tiful. Thank you!",
+  dragon: "Roar-some! I'm all fired up!",
 };
 
 export function pick(list) {
