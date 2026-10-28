@@ -2,7 +2,9 @@
 
 A sushi game starring Chef Nori, a fat, grumpy black cat. Customers (animals, and the occasional animal-ish spirit) sit at the counter and order sushi. You drag ingredients onto the board, then drag the finished plate to the customer.
 
-The first levels are untimed Learning Levels: Level 1 teaches nigiri, Level 2 teaches maki (nori, rice, filling, then roll it on the bamboo mat). Timed levels come after.
+The first levels are untimed Learning Levels: Level 1 teaches nigiri, Level 2 teaches maki (nori, rice, filling, then roll it on the bamboo mat), and Level 3 teaches fancy rolls with toppings. Timed levels come after.
+
+In Level 3 a tray of toppings (avocado, sesame and sauce) sits on the counter. Roll the maki first, then drag toppings onto it: a **Caterpillar Roll** is a cucumber roll with avocado on top, a **Dragon Roll** is an eel roll with avocado and then sauce, and a **Rainbow Roll** is a cucumber roll with salmon, avocado and sesame. Toppings can go on in any order, except sauce, which always goes on last. A roll served before its toppings are all on goes back to the board instead of the bin. Chef's choice inventions can have toppings too.
 
 About 1 in 4 levels has a customer (never the first, and at most one per level) who orders **Chef's Choice**: they show what they love and what they won't eat, and you invent something. Every finished order gets a 1 to 5 star rating:
 

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   pickChefsChoice, inventProblem, inventedName, rateOrder, rateChefsChoice, serveChefsChoice,
-  recipeId, TASTES, TOPPINGS, RECIPES, PERFECT_TIP, COINS_PER_STAR, MAX_BOARD, MAKI_BASE,
+  recipeId, TASTES, TOPPINGS, RECIPES, PERFECT_TIP, COINS_PER_STAR, CHEFS_CHOICE_PER_LEVEL, MAX_BOARD, MAKI_BASE,
 } from '../src/logic.js';
 import { LEVELS } from '../src/levels.js';
 import { emptySave, loadSave, writeSave, addToRecipeBook, renameRecipe, SAVE_KEY, MAX_NAME } from '../src/save.js';
@@ -86,16 +86,21 @@ function allPlates(ingredients) {
 
 test('every customer has tastes, and 5 stars is possible in every level they visit', () => {
   for (const level of LEVELS) {
-    const plates = allPlates(level.ingredients);
+    const ingredients = [...level.ingredients, ...(level.tray ?? [])];
+    const plates = allPlates(ingredients);
     for (const c of level.customers) {
       const tastes = TASTES[c.kind];
       assert.ok(tastes, `${c.kind} needs tastes`);
       for (const ing of [tastes.likes, ...tastes.dislikes]) assert.ok(TOPPINGS.includes(ing), ing);
-      assert.ok(level.ingredients.includes(tastes.likes), `${c.kind} likes something in level ${level.id}`);
+      assert.ok(ingredients.includes(tastes.likes), `${c.kind} likes something in level ${level.id}`);
       assert.ok(plates.some(([b, r]) => rateChefsChoice(b, r, tastes).stars === 5), `${c.kind} in level ${level.id}`);
-      // A 5 star invention pays at least as much as a perfect menu plate, so star targets stay fair.
-      assert.ok(5 * COINS_PER_STAR >= RECIPES[c.order].price + PERFECT_TIP);
     }
+    // A 5 star invention can pay less than a fancy menu plate. Even if chef's choice lands on
+    // the priciest customer, a perfect shift still earns 3 stars.
+    const plates3 = level.customers.map((c) => RECIPES[c.order].price + PERFECT_TIP);
+    const perfect = plates3.reduce((a, b) => a + b, 0);
+    const shortfall = Math.max(0, ...plates3.map((p) => p - 5 * COINS_PER_STAR));
+    assert.ok(perfect - shortfall * CHEFS_CHOICE_PER_LEVEL >= level.starTargets[2], `level ${level.id}`);
   }
 });
 
